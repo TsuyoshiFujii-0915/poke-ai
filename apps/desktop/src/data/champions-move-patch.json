@@ -1,0 +1,73 @@
+{
+  "Anchor Shot": {
+    "basePower": 90
+  },
+  "Apple Acid": {
+    "basePower": 90
+  },
+  "Beak Blast": {
+    "basePower": 120
+  },
+  "Bolt Beak": {
+    "basePower": 80
+  },
+  "Bone Rush": {
+    "basePower": 30
+  },
+  "Crush Claw": {
+    "flags": {
+      "slicing": 1
+    }
+  },
+  "Dire Claw": {
+    "flags": {
+      "slicing": 1
+    }
+  },
+  "Dragon Claw": {
+    "flags": {
+      "slicing": 1
+    }
+  },
+  "Fire Lash": {
+    "basePower": 90
+  },
+  "First Impression": {
+    "basePower": 100
+  },
+  "Fishious Rend": {
+    "basePower": 80
+  },
+  "Gear Grind": {
+    "basePower": 60
+  },
+  "Grav Apple": {
+    "basePower": 90
+  },
+  "Infernal Parade": {
+    "basePower": 65
+  },
+  "Mountain Gale": {
+    "basePower": 120
+  },
+  "Night Daze": {
+    "basePower": 90
+  },
+  "Psyshield Bash": {
+    "basePower": 90
+  },
+  "Shadow Claw": {
+    "flags": {
+      "slicing": 1
+    }
+  },
+  "Snap Trap": {
+    "type": "Steel"
+  },
+  "Spirit Shackle": {
+    "basePower": 90
+  },
+  "Trop Kick": {
+    "basePower": 85
+  }
+}

@@ -1,0 +1,735 @@
+:root {
+  color-scheme: dark;
+  --text: #eef1f8;
+  --muted: #8f97ad;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --panel: rgba(20, 24, 39, 0.78);
+  --input-bg: rgba(8, 10, 18, 0.75);
+  --mine: #57b3ff;
+  --mine-2: #7c6bff;
+  --opp: #ff5d7e;
+  --opp-2: #ff9a5c;
+  --gold: #fbbf24;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: "Avenir Next", -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+  background:
+    radial-gradient(1100px 700px at 88% -12%, rgba(124, 107, 255, 0.17), transparent 62%),
+    radial-gradient(900px 650px at -8% 112%, rgba(255, 93, 126, 0.12), transparent 60%),
+    linear-gradient(180deg, #0a0c14, #05060a);
+  background-attachment: fixed;
+}
+
+/* レイアウト: ゲーム画面 65% / ダメ計 35%（最低220px）、右に広めのコンパニオン枠 */
+.app-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-rows: minmax(0, 13fr) minmax(220px, 7fr);
+  grid-template-areas:
+    "game sidebar"
+    "panel sidebar";
+  height: 100vh;
+  gap: 12px;
+  padding: 12px;
+}
+
+.area-game {
+  grid-area: game;
+  min-height: 0;
+}
+
+.area-sidebar {
+  grid-area: sidebar;
+  display: flex;
+  min-height: 0;
+}
+
+.area-panel {
+  grid-area: panel;
+  min-height: 0;
+}
+
+/* --- 共通カード --- */
+.video-panel,
+.companion-pane,
+.matchup-panel {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* --- ゲーム画面 --- */
+.video-panel {
+  position: relative;
+  height: 100%;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.video-panel img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.video-placeholder {
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.video-placeholder .hint {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.live-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #fff;
+  background: rgba(8, 10, 18, 0.65);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(6px);
+}
+
+.live-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff4d67;
+  box-shadow: 0 0 8px rgba(255, 77, 103, 0.9);
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* --- コンパニオン枠（アバター + 字幕を統合） --- */
+.companion-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 18px;
+  gap: 14px;
+  background:
+    radial-gradient(360px 300px at 50% 18%, rgba(124, 107, 255, 0.14), transparent 70%),
+    var(--panel);
+  backdrop-filter: blur(14px);
+}
+
+.companion-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.companion-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  background: linear-gradient(90deg, var(--mine), var(--mine-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.companion-phase {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.companion-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  min-height: 0;
+}
+
+.avatar-ring {
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  padding: 3px;
+  background: conic-gradient(from 210deg, var(--mine), var(--mine-2), var(--opp), var(--opp-2), var(--mine));
+  box-shadow: 0 0 42px rgba(124, 107, 255, 0.32);
+}
+
+.avatar-ring .avatar-face {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.08), transparent 55%),
+    #10131f;
+}
+
+.speech-bubble {
+  position: relative;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+}
+
+.speech-bubble::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+/* --- 対面ダメージ計算パネル ---
+   自分=左カラム / 相手=右カラム。中央はHPバー2段で、
+   HPバーは防御側（HPが減る側）のカラムに隣接させる:
+     上段 = 自分の攻撃 → 相手の残りHP
+     下段 = 相手の攻撃 → 自分の残りHP */
+.matchup-panel {
+  position: relative;
+  height: 100%;
+  padding: 12px 18px;
+  display: flex;
+  gap: 16px;
+  overflow: visible;
+  background:
+    radial-gradient(620px 260px at 97% 0%, rgba(255, 93, 126, 0.11), transparent 65%),
+    radial-gradient(620px 260px at 3% 100%, rgba(87, 179, 255, 0.11), transparent 65%),
+    var(--panel);
+  backdrop-filter: blur(14px);
+}
+
+/* --- 自分/相手カラム（ポケモン単位の設定 + 公式絵） ---
+   自分: 設定が上・絵が中・能力ポイントが下（絵は下段=自分の残りHPバー側）
+   相手: 絵が上・設定が下（絵は上段=相手の残りHPバー側）
+   まとまりを縦中央に寄せて上下に余白を作る */
+.side-col {
+  flex: 0 0 212px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+}
+
+.side-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.side-fields .search-select,
+.side-fields .search-select input {
+  width: 100%;
+}
+
+/* アイコン付き入力行（ボール=ポケモン、@=持ち物。色で自分/相手を表す） */
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.input-row .row-icon {
+  flex: 0 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.input-row .search-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.side-col.mine .row-icon {
+  color: var(--mine);
+}
+
+.side-col.opp .row-icon {
+  color: var(--opp);
+}
+
+/* サイドカラムは縦に複数項目積むため、入力を少し低くする */
+.side-fields .search-select input {
+  height: 26px;
+}
+
+/* --- 中央: 攻撃2段（中央にまとめて上下の余白を均等にする） --- */
+.attack-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+}
+
+.attack-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* 技セレクタは攻撃側の色アクセントで帰属を示す（ラベルなし） */
+.attack-row.mine .search-select input {
+  border-left: 3px solid var(--mine);
+}
+
+.attack-row.opp .search-select input {
+  border-left: 3px solid var(--opp);
+}
+
+/* --- ポケモン公式絵 ---
+   固定基準の高さ（狭いときは縮む）。flex-growさせないことで
+   カラム全体が中央にまとまり、上下に余白が生まれる */
+.poke-art {
+  flex: 0 1 140px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.poke-art.opp {
+  background: radial-gradient(closest-side, rgba(255, 93, 126, 0.14), transparent 72%);
+}
+
+.poke-art.mine {
+  background: radial-gradient(closest-side, rgba(87, 179, 255, 0.14), transparent 72%);
+}
+
+.poke-art img {
+  height: 100%;
+  max-height: 156px;
+  max-width: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55));
+  user-select: none;
+}
+
+/* 自分のポケモンは相手（右上）の方を向かせる */
+.poke-art.mine img {
+  transform: scaleX(-1);
+}
+
+.poke-art-placeholder {
+  height: min(100%, 92px);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.22);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+/* --- VS 境界線（水平ライン + 中央バッジ） --- */
+.vs-divider {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 24px;
+}
+
+.vs-divider::before,
+.vs-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+
+.vs-divider::before {
+  background: linear-gradient(90deg, transparent, rgba(87, 179, 255, 0.55));
+}
+
+.vs-divider::after {
+  background: linear-gradient(90deg, rgba(255, 93, 126, 0.55), transparent);
+}
+
+.vs-badge {
+  font-size: 10px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.1em;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(10, 12, 20, 0.8);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 0 14px rgba(124, 107, 255, 0.25);
+}
+
+/* --- 検索式プルダウン --- */
+.search-select {
+  position: relative;
+}
+
+.search-select input {
+  width: 138px;
+  height: 30px;
+  padding: 0 22px 0 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text);
+  font-size: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.search-select input::placeholder {
+  color: rgba(143, 151, 173, 0.4);
+}
+
+.search-select input:focus {
+  outline: none;
+  border-color: var(--mine);
+  box-shadow: 0 0 0 3px rgba(87, 179, 255, 0.16);
+}
+
+.search-select .caret {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.search-select .options {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 236px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  background: rgba(18, 21, 34, 0.95);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(14px);
+}
+
+.search-select .options li {
+  padding: 6px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.search-select .options li.highlight {
+  background: linear-gradient(90deg, rgba(87, 179, 255, 0.22), rgba(124, 107, 255, 0.14));
+}
+
+.search-select .en-sub {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* --- HPバー（3プリセット: 横長バー3本・縦並び） --- */
+.hp-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hp-bars.muted {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 6px 0;
+}
+
+.hp-bar-row {
+  display: grid;
+  grid-template-columns: 64px minmax(140px, 1fr) 94px 74px;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hp-bar-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hp-bar-track {
+  width: 100%;
+  height: 14px;
+  display: flex;
+  background: rgba(10, 6, 12, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.hp-bar-damage {
+  background: linear-gradient(90deg, rgba(255, 93, 126, 0.4), rgba(120, 32, 50, 0.9));
+  flex-shrink: 0;
+}
+
+/* 確定1発（確定ダメージ100%以上）: ストライプ＋グロウで「オーバーキル」を強調 */
+.hp-bar-track.ko {
+  border-color: rgba(255, 93, 126, 0.45);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.6),
+    0 0 12px rgba(255, 93, 126, 0.25);
+}
+
+.hp-bar-track.ko .hp-bar-damage {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.06) 0 8px,
+      transparent 8px 16px
+    ),
+    linear-gradient(90deg, rgba(255, 93, 126, 0.55), rgba(150, 36, 58, 0.95));
+}
+
+.hp-bar-range {
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+
+.hp-bar-remain {
+  flex-shrink: 0;
+  border-radius: 0 999px 999px 0;
+}
+
+.hp-bar-damage-text {
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.hp-bar-ko {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* --- 能力ポイント入力 ---
+   セグメント型: 上から ステータス文字 / ▲ / 数値 / ▼。
+   ▲▼は性格補正トグル（▲=1.1倍, ▼=0.9倍）。HPはプレースホルダーで桁を揃える */
+.points-input {
+  display: flex;
+  align-items: stretch;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 2px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.points-input:focus-within {
+  border-color: var(--mine);
+  box-shadow: 0 0 0 3px rgba(87, 179, 255, 0.16);
+}
+
+.points-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 1px;
+  border-radius: 6px;
+}
+
+.points-input .stat-letter {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(143, 151, 173, 0.7);
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.points-cell.active .stat-letter {
+  color: var(--mine);
+}
+
+/* 性格補正トグル（数値の上下の三角形） */
+.mod-arrow {
+  border: none;
+  background: none;
+  margin: 0;
+  padding: 2px 7px;
+  font-size: 7px;
+  line-height: 1;
+  color: rgba(143, 151, 173, 0.4);
+  cursor: pointer;
+}
+
+.mod-arrow:hover {
+  color: var(--text);
+}
+
+.mod-arrow.up.active {
+  color: var(--gold);
+  text-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+}
+
+.mod-arrow.down.active {
+  color: #6ea8ff;
+  text-shadow: 0 0 6px rgba(110, 168, 255, 0.6);
+}
+
+.mod-arrow.placeholder {
+  visibility: hidden;
+}
+
+/* 数値入力フォーカス時のクイック選択（0 / 32）。
+   能力ポイントはパネル最下部にあり下方向は画面外に出るため上に開く */
+.points-quick {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  background: rgba(18, 21, 34, 0.95);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(14px);
+}
+
+.points-quick button {
+  border: none;
+  background: none;
+  padding: 3px 12px;
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.points-quick button:hover {
+  background: linear-gradient(90deg, rgba(87, 179, 255, 0.22), rgba(124, 107, 255, 0.14));
+}
+
+.points-input input {
+  width: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.points-input input::-webkit-inner-spin-button,
+.points-input input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.points-input input:focus {
+  outline: none;
+}
+
+.points-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  margin-left: 2px;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.points-total .stat-letter {
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(143, 151, 173, 0.7);
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.points-total.full {
+  color: #34d399;
+}
+
+.points-total.full .stat-letter {
+  color: rgba(52, 211, 153, 0.7);
+}
