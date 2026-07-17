@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>poke-ai viewer PoC</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: #0d0f14;
+        color: #e8eaf0;
+        font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 14px;
+        background: #161923;
+        border-bottom: 1px solid #262b3a;
+        font-size: 13px;
+      }
+      header h1 {
+        font-size: 14px;
+        margin: 0;
+        font-weight: 600;
+      }
+      #status {
+        padding: 2px 10px;
+        border-radius: 10px;
+        background: #3a2530;
+        color: #ff8896;
+      }
+      #status.connected {
+        background: #1d3229;
+        color: #6fe3a5;
+      }
+      #stats {
+        margin-left: auto;
+        color: #8b93a8;
+        font-variant-numeric: tabular-nums;
+      }
+      main {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 0;
+      }
+      #screen {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        background: #000;
+      }
+      #placeholder {
+        color: #8b93a8;
+        text-align: center;
+        line-height: 1.8;
+      }
+      code {
+        background: #262b3a;
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>poke-ai viewer PoC</h1>
+      <span id="status">未接続</span>
+      <span id="stats"></span>
+    </header>
+    <main>
+      <div id="placeholder">
+        配信サーバーに接続中...<br />
+        <code>poke-capture-poc stream</code> が起動しているか確認して
+      </div>
+      <img id="screen" alt="" hidden />
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
