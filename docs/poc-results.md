@@ -236,4 +236,25 @@ swift run poke-capture-poc recognize-ipad-image \
 - 通常対戦HUDの自分左下・相手右上のみ。
 - 選出画面、能力確認画面、演出中は別レイアウトまたはHUD非表示のため対象外。
 - iPhoneとSwitch / Switch 2はゲームUI位置を実画面で測定してから専用ROIを定義する。iPadのROIを暗黙に再利用しない。
-- `CVPixelBuffer`入力APIは実装済み。ライブ映像での実行タイミング制御、複数フレーム合議、イベントJSONとBattleState連携は未実装。
+- `CVPixelBuffer`入力API、ライブ映像での実行タイミング制御、複数フレーム合議、構造化イベントJSON出力まで実装済み。BattleState連携は未実装。
+
+### ライブ交代検知（2026-07-17）
+
+- 左右独立の状態機械で、8Hzの名前領域差分を監視。
+- 直近5サンプル中3回の変化で交代疑いへ遷移し、3サンプル連続で安定してからOCRを開始。
+- 1バーストは異なる5フレーム。完全一致は3票、1文字補正は4票かつ信頼度中央値の条件を満たした場合だけ確定。
+- 不成立時は最大3バーストまで再試行し、それでも確定できなければ`pokemon_detection_failed`を明示出力。
+- 3秒ごとの`.fast`プローブは交代候補の発見にだけ使い、単発結果ではBattleState更新イベントを出さない。
+- Visionは専用直列キューで実行し、キャプチャ・MJPEG配信キューをブロックしない。
+- OCRリクエストに世代IDを付け、演出再開などで無効になった遅延結果は`stale_recognition_rejected`として明示的に拒否。
+- `ipad-battle-hud-v1`と異なるアスペクト比・向きはエラーにし、iPhone / SwitchへROIを暗黙流用しない。
+- Swift Testingは既存5件を含む15件が成功。状態機械、時間合議、実画面シグネチャ、レイアウト拒否を検証。
+
+実行コマンド:
+
+```bash
+cd poc/capture
+swift run poke-capture-poc recognize-stream \
+  ../../apps/desktop/src/data/champions-species.json \
+  ../../apps/desktop/src/data/ja-names.json
+```

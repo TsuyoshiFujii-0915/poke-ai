@@ -340,6 +340,7 @@ final class MJPEGServer {
 /// フレームを縮小・JPEG化してMJPEGサーバーへ流すデリゲート
 final class StreamCollector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private let server: MJPEGServer
+    private let frameObserver: CapturedFrameObserver
     private let scale: CGFloat
     private let quality: CGFloat
     private let minFrameInterval: TimeInterval
@@ -355,11 +356,18 @@ final class StreamCollector: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     private var lastReportAt = Date()
     private(set) var outputSize: CGSize = .zero
 
-    init(server: MJPEGServer, scale: CGFloat, quality: CGFloat, targetFps: Double) {
+    init(
+        server: MJPEGServer,
+        scale: CGFloat,
+        quality: CGFloat,
+        targetFps: Double,
+        frameObserver: CapturedFrameObserver
+    ) {
         self.server = server
         self.scale = scale
         self.quality = quality
         self.minFrameInterval = 1.0 / targetFps
+        self.frameObserver = frameObserver
     }
 
     func captureOutput(_ output: AVCaptureOutput,
@@ -367,10 +375,14 @@ final class StreamCollector: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
                        from connection: AVCaptureConnection) {
         inputFrames += 1
         let now = Date()
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            log("エラー: 映像フレームにCVPixelBufferがない")
+            return
+        }
+        frameObserver.receive(pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer)
 
         // fpsスロットリング（間引き）
-        if now.timeIntervalSince(lastSentAt) >= minFrameInterval,
-           let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+        if now.timeIntervalSince(lastSentAt) >= minFrameInterval {
             lastSentAt = now
             let start = CFAbsoluteTimeGetCurrent()
             var image = CIImage(cvPixelBuffer: pixelBuffer)
@@ -403,7 +415,15 @@ final class StreamCollector: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     }
 }
 
-func runStream(device: AVCaptureDevice, port: UInt16, scale: CGFloat, quality: CGFloat, targetFps: Double) -> Never {
+func runStream(
+    device: AVCaptureDevice,
+    port: UInt16,
+    scale: CGFloat,
+    quality: CGFloat,
+    targetFps: Double,
+    frameObserver: CapturedFrameObserver,
+    captureQueue: DispatchQueue
+) -> Never {
     let server: MJPEGServer
     do {
         server = try MJPEGServer(port: port)
@@ -414,7 +434,13 @@ func runStream(device: AVCaptureDevice, port: UInt16, scale: CGFloat, quality: C
     server.start()
 
     let session = AVCaptureSession()
-    let collector = StreamCollector(server: server, scale: scale, quality: quality, targetFps: targetFps)
+    let collector = StreamCollector(
+        server: server,
+        scale: scale,
+        quality: quality,
+        targetFps: targetFps,
+        frameObserver: frameObserver
+    )
 
     do {
         let input = try AVCaptureDeviceInput(device: device)
@@ -431,7 +457,7 @@ func runStream(device: AVCaptureDevice, port: UInt16, scale: CGFloat, quality: C
     let output = AVCaptureVideoDataOutput()
     output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
     output.alwaysDiscardsLateVideoFrames = true
-    output.setSampleBufferDelegate(collector, queue: DispatchQueue(label: "capture.frames"))
+    output.setSampleBufferDelegate(collector, queue: captureQueue)
     guard session.canAddOutput(output) else {
         log("エラー: 出力を追加できない")
         exit(1)
@@ -617,7 +643,49 @@ case "stream":
         log("デバイスが見つからなかったため配信を中止。")
         exit(1)
     }
-    runStream(device: device, port: port, scale: scale, quality: quality, targetFps: fps)
+    runStream(
+        device: device,
+        port: port,
+        scale: scale,
+        quality: quality,
+        targetFps: fps,
+        frameObserver: IgnoringCapturedFrameObserver(),
+        captureQueue: DispatchQueue(label: "capture.frames")
+    )
+
+case "recognize-stream":
+    guard args.count == 4 else {
+        print("使い方: poke-capture-poc recognize-stream <species-json-path> <ja-names-json-path>")
+        exit(64)
+    }
+    do {
+        let candidates = try loadPokemonNameCandidates(
+            speciesPath: args[2],
+            japaneseNamesPath: args[3]
+        )
+        let captureQueue = DispatchQueue(label: "capture.frames")
+        let detector = try LivePokemonNameDetector(
+            candidates: candidates,
+            stateQueue: captureQueue
+        )
+        prepareCaptureEnvironment()
+        guard let device = waitForDevice(timeoutSeconds: 20) else {
+            log("デバイスが見つからなかったため認識配信を中止。")
+            exit(1)
+        }
+        runStream(
+            device: device,
+            port: 8787,
+            scale: 0.5,
+            quality: 0.6,
+            targetFps: 30,
+            frameObserver: detector,
+            captureQueue: captureQueue
+        )
+    } catch {
+        log("ライブ名前認識の初期化に失敗: \(error)")
+        exit(1)
+    }
 
 case "recognize-ipad-image":
     guard args.count == 6 else {
@@ -645,9 +713,10 @@ case "recognize-ipad-image":
     }
 
 default:
-    print("使い方: poke-capture-poc [list|capture|stream|recognize-ipad-image] ...")
+    print("使い方: poke-capture-poc [list|capture|stream|recognize-stream|recognize-ipad-image] ...")
     print("  capture [秒数]")
     print("  stream [port=8787] [scale=0.5] [quality=0.6] [fps=30]")
+    print("  recognize-stream <species-json-path> <ja-names-json-path>")
     print("  recognize-ipad-image <image-path> <player|opponent> <species-json-path> <ja-names-json-path>")
     exit(64)
 }

@@ -9,14 +9,33 @@ public final class PokemonNameRecognizer {
     private let maximumCandidateCount: Int
     private let minimumTextHeight: Float
     private let maximumEditDistance: Int
+    private let recognitionMode: TextRecognitionMode
     private let matcher = PokemonNameMatcher()
+
+    public convenience init(
+        regions: BattleNameRegions,
+        recognitionLanguage: String,
+        maximumCandidateCount: Int,
+        minimumTextHeight: Float,
+        maximumEditDistance: Int
+    ) throws {
+        try self.init(
+            regions: regions,
+            recognitionLanguage: recognitionLanguage,
+            maximumCandidateCount: maximumCandidateCount,
+            minimumTextHeight: minimumTextHeight,
+            maximumEditDistance: maximumEditDistance,
+            recognitionMode: .accurate
+        )
+    }
 
     public init(
         regions: BattleNameRegions,
         recognitionLanguage: String,
         maximumCandidateCount: Int,
         minimumTextHeight: Float,
-        maximumEditDistance: Int
+        maximumEditDistance: Int,
+        recognitionMode: TextRecognitionMode
     ) throws {
         guard maximumCandidateCount > 0 else {
             throw NameRecognitionError.invalidMaximumCandidateCount(maximumCandidateCount)
@@ -31,7 +50,12 @@ public final class PokemonNameRecognizer {
         }
 
         let languageProbe = VNRecognizeTextRequest()
-        languageProbe.recognitionLevel = .accurate
+        switch recognitionMode {
+        case .fast:
+            languageProbe.recognitionLevel = .fast
+        case .accurate:
+            languageProbe.recognitionLevel = .accurate
+        }
         let supportedLanguages: [String]
         do {
             supportedLanguages = try languageProbe.supportedRecognitionLanguages()
@@ -47,6 +71,7 @@ public final class PokemonNameRecognizer {
         self.maximumCandidateCount = maximumCandidateCount
         self.minimumTextHeight = minimumTextHeight
         self.maximumEditDistance = maximumEditDistance
+        self.recognitionMode = recognitionMode
     }
 
     public func recognize(
@@ -83,9 +108,15 @@ public final class PokemonNameRecognizer {
         candidates: [PokemonNameCandidate]
     ) throws -> PokemonNameDetectionOutcome {
         let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
+        switch recognitionMode {
+        case .fast:
+            request.recognitionLevel = .fast
+            request.usesLanguageCorrection = false
+        case .accurate:
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+        }
         request.recognitionLanguages = [recognitionLanguage]
-        request.usesLanguageCorrection = true
         request.customWords = candidates.map(\.displayName)
         request.minimumTextHeight = minimumTextHeight
         request.regionOfInterest = regions.region(for: side).visionRegionOfInterest

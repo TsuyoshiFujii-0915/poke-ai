@@ -50,3 +50,28 @@ The current regions were measured from the 2360 x 1640 iPad capture and apply on
 | Opponent | `(0.81141, 0.02500, 0.13896, 0.06429)` |
 
 Team selection, summary screens, and animation frames use different layouts or hide the HUD. They must not be interpreted using these regions.
+
+## Detect live name changes from an iPad capture
+
+The live command keeps the MJPEG stream on port 8787 and emits structured recognition events as `EVENT_JSON <json>` lines:
+
+```bash
+swift run poke-capture-poc recognize-stream \
+  ../../apps/desktop/src/data/champions-species.json \
+  ../../apps/desktop/src/data/ja-names.json
+```
+
+The live detector processes the source `CVPixelBuffer` before JPEG encoding. Each side is independent:
+
+- A compact luminance signature is sampled at 8 Hz.
+- Three changed samples in a five-sample window start a transition.
+- OCR waits for three visually stable samples.
+- Confirmation uses five distinct frames, with up to three burst attempts.
+- Exact names require three votes. One-edit corrections require four votes and a confidence threshold.
+- A three-second fast probe recovers visual transitions that the signature detector missed.
+- Vision runs on a dedicated serial queue, so OCR does not block capture or MJPEG encoding.
+- Results from an invalidated generation are reported as stale and cannot update the detected Pokémon.
+
+The command accepts only the `ipad-battle-hud-v1` layout. A source with an incompatible aspect ratio or orientation fails explicitly. iPhone and Nintendo Switch layouts require separately measured profiles.
+
+Battle-state integration is not part of this PoC command yet. Consumers should parse only lines prefixed with `EVENT_JSON`; diagnostic logs use the existing timestamped format.
