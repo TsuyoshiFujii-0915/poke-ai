@@ -1,9 +1,14 @@
 import CoreGraphics
 import Foundation
 
-public enum BattleSide: String, Equatable, Sendable {
+public enum BattleSide: String, Equatable, Hashable, Sendable {
     case player
     case opponent
+}
+
+public enum TextRecognitionMode: Equatable, Sendable {
+    case fast
+    case accurate
 }
 
 public enum NameRecognitionError: Error, Equatable {
