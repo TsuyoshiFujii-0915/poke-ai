@@ -57,7 +57,7 @@ struct PokemonSwitchDetectorTests {
     }
 
     @Test
-    func waitsForStableHudThenConfirmsSwitch() throws -> Void {
+    func confirmsVisuallyVerifiedSwitchAcrossVisibleAnimationFrames() throws -> Void {
         var detector = try makeDetector()
         let first = detection(id: "Meowscarada", name: "マスカーニャ", distance: 0, confidence: 0.9)
         let second = detection(id: "Gyarados", name: "ギャラドス", distance: 0, confidence: 0.88)
@@ -78,25 +78,52 @@ struct PokemonSwitchDetectorTests {
             outcome: .detected(second)
         ))
         #expect(verifiedChange.contains(.statusChanged(.transitioning(.player, first))))
+        #expect(verifiedChange.contains(.statusChanged(.recognizing(.player, visualProbe.generation + 1, 1))))
 
-        #expect(try detector.consume(frame: hiddenFrame(15, 1.5)).isEmpty)
-        #expect(try detector.consume(frame: frame(16, 1.6, previous: 0.3, confirmed: .score(0.5))).isEmpty)
-        #expect(try detector.consume(frame: frame(17, 1.7, previous: 0.01, confirmed: .score(0.5))).isEmpty)
-        #expect(try detector.consume(frame: frame(18, 1.8, previous: 0.01, confirmed: .score(0.5))).isEmpty)
-        var request = try confirmationRequest(from: detector.consume(frame: frame(19, 1.9, previous: 0.01, confirmed: .score(0.5))))
+        var request = try confirmationRequest(from: detector.consume(frame: frame(
+            15, 1.5, previous: 0.4, confirmed: .score(0.5)
+        )))
 
         var outputs: [LiveNameDetectionOutput] = []
         for index in 0..<5 {
             outputs += try detector.consume(recognition: recognition(request: request, outcome: .detected(second)))
             if index < 4 {
                 request = try confirmationRequest(from: detector.consume(frame: frame(
-                    UInt64(20 + index), 2.0 + Double(index) * 0.1,
-                    previous: 0.01, confirmed: .score(0.5)
+                    UInt64(16 + index), 1.6 + Double(index) * 0.1,
+                    previous: 0.4, confirmed: .score(0.5)
                 )))
             }
         }
 
         #expect(outputs.contains(.pokemonSwitched(previous: first, current: second)))
+    }
+
+    @Test
+    func resumesVerifiedSwitchWhenHUDReappearsDuringAnimation() throws -> Void {
+        var detector = try makeDetector()
+        let first = detection(id: "Meowscarada", name: "マスカーニャ", distance: 0, confidence: 0.9)
+        let second = detection(id: "Gyarados", name: "ギャラドス", distance: 0, confidence: 0.88)
+        _ = try completeInitialBurst(detector: &detector, outcomes: Array(repeating: .detected(first), count: 5))
+
+        var changed: [LiveNameDetectionOutput] = []
+        changed += try detector.consume(frame: frame(9, 0.9, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(10, 1.0, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(11, 1.1, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(12, 1.2, previous: 0.01, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(13, 1.3, previous: 0.01, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(14, 1.4, previous: 0.01, confirmed: .score(0.4)))
+        let visualProbe = try probeRequest(from: changed)
+        _ = try detector.consume(recognition: recognition(
+            request: visualProbe,
+            outcome: .detected(second)
+        ))
+
+        let hidden = try detector.consume(frame: hiddenFrame(15, 1.5))
+        #expect(hidden.contains(.statusChanged(.waitingForStableHUD(.player, visualProbe.generation + 2))))
+        #expect(try detector.consume(frame: frame(16, 1.6, previous: 0.4, confirmed: .score(0.5))).isEmpty)
+        #expect(try detector.consume(frame: frame(17, 1.7, previous: 0.4, confirmed: .score(0.5))).isEmpty)
+        let resumed = try detector.consume(frame: frame(18, 1.8, previous: 0.4, confirmed: .score(0.5)))
+        _ = try confirmationRequest(from: resumed)
     }
 
     @Test

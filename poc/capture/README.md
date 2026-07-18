@@ -69,7 +69,8 @@ The live detector processes the source `CVPixelBuffer` before JPEG encoding. Eac
 - Three consecutive frames must be visible, changed from the confirmed HUD, and stable relative to the preceding frame before a background OCR probe starts.
 - The public state remains stable while the probe is pending. Only a confident exact match for a different Pokémon starts a transition.
 - A probe that finds the current Pokémon refreshes the comparison signature without emitting a duplicate event. An inconclusive probe discards the accumulated visual evidence and delays visual retry until the heartbeat interval.
-- OCR waits for three visually stable samples after the transition.
+- After an exact different-name probe, five-frame confirmation starts immediately and accepts visible frames even while the battle background is moving.
+- If the HUD becomes hidden during switch confirmation, OCR resumes after three consecutive visible frames. Initial detection still requires pixel stability.
 - Confirmation uses five distinct frames, with up to three burst attempts.
 - Exact names require three votes. One-edit corrections require four votes and a confidence threshold.
 - A three-second accurate Japanese OCR probe recovers visual transitions that the signature detector missed. The target Vision runtime does not support Japanese in fast mode.

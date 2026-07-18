@@ -4,7 +4,7 @@ Verify visual switch evidence with OCR before reporting a transition
 
 # Status
 
-Accepted
+Superseded by [ADR-0005](0005-confirm-verified-switches-during-visible-animation.md)
 
 # Context
 

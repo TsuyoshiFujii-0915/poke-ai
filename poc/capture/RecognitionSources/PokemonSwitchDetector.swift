@@ -160,7 +160,7 @@ public struct PokemonSwitchDetector: Sendable {
             )
             return []
         }
-        let nextStableCount = frame.differenceFromPrevious <= policy.stableDifferenceThreshold
+        let nextStableCount = isStableEnoughToBeginConfirmation(frame, previous: previous)
             ? stableCount + 1
             : 0
         guard nextStableCount >= policy.stableSampleCount,
@@ -197,8 +197,7 @@ public struct PokemonSwitchDetector: Sendable {
         attempt: Int,
         nextRecognitionAt: TimeInterval
     ) -> [LiveNameDetectionOutput] {
-        guard frame.hudVisibility == .visible,
-              frame.differenceFromPrevious <= policy.changeDifferenceThreshold else {
+        guard isValidConfirmationFrame(frame, previous: previous) else {
             generation += 1
             pendingRequest = nil
             phase = .waitingForStable(
@@ -328,13 +327,16 @@ public struct PokemonSwitchDetector: Sendable {
             return [.confirmedSignatureRefreshRequested(detection)]
         }
         generation += 1
-        phase = .waitingForStable(
+        phase = .confirming(
             previous: current,
-            stableCount: 0,
+            outcomes: [],
             attempt: 1,
-            earliestRecognitionAt: requestedAt
+            nextRecognitionAt: requestedAt + policy.recognitionSampleInterval
         )
-        return [.statusChanged(.transitioning(side, current))]
+        return [
+            .statusChanged(.transitioning(side, current)),
+            .statusChanged(.recognizing(side, generation, 1)),
+        ]
     }
 
     private mutating func consumeConfirmationResult(
@@ -446,6 +448,29 @@ public struct PokemonSwitchDetector: Sendable {
             return 0
         }
         return currentCount + 1
+    }
+
+    private func isStableEnoughToBeginConfirmation(
+        _ frame: NameRegionFrameObservation,
+        previous: PokemonNameDetection?
+    ) -> Bool {
+        if previous != nil {
+            return true
+        }
+        return frame.differenceFromPrevious <= policy.stableDifferenceThreshold
+    }
+
+    private func isValidConfirmationFrame(
+        _ frame: NameRegionFrameObservation,
+        previous: PokemonNameDetection?
+    ) -> Bool {
+        guard frame.hudVisibility == .visible else {
+            return false
+        }
+        if previous != nil {
+            return true
+        }
+        return frame.differenceFromPrevious <= policy.changeDifferenceThreshold
     }
 
     private func validate(frame: NameRegionFrameObservation) throws -> Void {
