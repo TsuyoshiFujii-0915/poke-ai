@@ -18,7 +18,8 @@ public struct PokemonSwitchDetector: Sendable {
             PokemonNameDetection,
             changeWindow: [Bool],
             lastProbeAt: TimeInterval,
-            stableChangedCount: Int
+            stableChangedCount: Int,
+            nextVisualProbeAt: TimeInterval
         )
         case probing(
             PokemonNameDetection,
@@ -81,13 +82,14 @@ public struct PokemonSwitchDetector: Sendable {
                 attempt: attempt,
                 nextRecognitionAt: nextRecognitionAt
             )
-        case let .stable(current, changeWindow, lastProbeAt, stableChangedCount):
+        case let .stable(current, changeWindow, lastProbeAt, stableChangedCount, nextVisualProbeAt):
             return try consumeStableFrame(
                 frame,
                 current: current,
                 changeWindow: changeWindow,
                 lastProbeAt: lastProbeAt,
-                stableChangedCount: stableChangedCount
+                stableChangedCount: stableChangedCount,
+                nextVisualProbeAt: nextVisualProbeAt
             )
         case let .probing(current, changeWindow, requestedAt, stableChangedCount):
             return try consumeProbingFrame(
@@ -223,7 +225,8 @@ public struct PokemonSwitchDetector: Sendable {
         current: PokemonNameDetection,
         changeWindow: [Bool],
         lastProbeAt: TimeInterval,
-        stableChangedCount: Int
+        stableChangedCount: Int,
+        nextVisualProbeAt: TimeInterval
     ) throws -> [LiveNameDetectionOutput] {
         let changed = try isChanged(frame)
         let nextWindow = append(changed, to: changeWindow)
@@ -233,15 +236,16 @@ public struct PokemonSwitchDetector: Sendable {
             currentCount: stableChangedCount
         )
         if nextWindow.filter({ $0 }).count >= policy.changedSampleCount,
-           nextStableChangedCount >= policy.stableSampleCount {
-            generation += 1
-            phase = .waitingForStable(
-                previous: current,
-                stableCount: 0,
-                attempt: 1,
-                earliestRecognitionAt: frame.monotonicTimestamp
+           nextStableChangedCount >= policy.stableSampleCount,
+           frame.monotonicTimestamp >= nextVisualProbeAt {
+            let request = makeRequest(frameID: frame.frameID, kind: .probe)
+            phase = .probing(
+                current,
+                changeWindow: nextWindow,
+                requestedAt: frame.monotonicTimestamp,
+                stableChangedCount: nextStableChangedCount
             )
-            return [.statusChanged(.transitioning(side, current))]
+            return [.requestRecognition(request)]
         }
         if frame.monotonicTimestamp - lastProbeAt >= policy.heartbeatInterval {
             let request = makeRequest(frameID: frame.frameID, kind: .probe)
@@ -257,7 +261,8 @@ public struct PokemonSwitchDetector: Sendable {
             current,
             changeWindow: nextWindow,
             lastProbeAt: lastProbeAt,
-            stableChangedCount: nextStableChangedCount
+            stableChangedCount: nextStableChangedCount,
+            nextVisualProbeAt: nextVisualProbeAt
         )
         return []
     }
@@ -276,18 +281,6 @@ public struct PokemonSwitchDetector: Sendable {
             changed: changed,
             currentCount: stableChangedCount
         )
-        guard nextWindow.filter({ $0 }).count < policy.changedSampleCount
-                || nextStableChangedCount < policy.stableSampleCount else {
-            generation += 1
-            pendingRequest = nil
-            phase = .waitingForStable(
-                previous: current,
-                stableCount: 0,
-                attempt: 1,
-                earliestRecognitionAt: frame.monotonicTimestamp
-            )
-            return [.statusChanged(.transitioning(side, current))]
-        }
         phase = .probing(
             current,
             changeWindow: nextWindow,
@@ -300,15 +293,16 @@ public struct PokemonSwitchDetector: Sendable {
     private mutating func consumeProbeResult(
         _ outcome: PokemonNameDetectionOutcome
     ) -> [LiveNameDetectionOutput] {
-        guard case let .probing(current, changeWindow, requestedAt, stableChangedCount) = phase else {
+        guard case let .probing(current, _, requestedAt, _) = phase else {
             return [.probeRejected(side, generation, outcome)]
         }
         guard case let .detected(detection) = outcome else {
             phase = .stable(
                 current,
-                changeWindow: changeWindow,
+                changeWindow: [],
                 lastProbeAt: requestedAt,
-                stableChangedCount: stableChangedCount
+                stableChangedCount: 0,
+                nextVisualProbeAt: requestedAt + policy.heartbeatInterval
             )
             return [.probeRejected(side, generation, outcome)]
         }
@@ -316,9 +310,10 @@ public struct PokemonSwitchDetector: Sendable {
               detection.visionConfidence >= policy.consensus.exactMatchMinimumMedianConfidence else {
             phase = .stable(
                 current,
-                changeWindow: changeWindow,
+                changeWindow: [],
                 lastProbeAt: requestedAt,
-                stableChangedCount: stableChangedCount
+                stableChangedCount: 0,
+                nextVisualProbeAt: requestedAt + policy.heartbeatInterval
             )
             return [.probeRejected(side, generation, outcome)]
         }
@@ -327,9 +322,10 @@ public struct PokemonSwitchDetector: Sendable {
                 current,
                 changeWindow: [],
                 lastProbeAt: requestedAt,
-                stableChangedCount: 0
+                stableChangedCount: 0,
+                nextVisualProbeAt: requestedAt + policy.retryInterval
             )
-            return []
+            return [.confirmedSignatureRefreshRequested(detection)]
         }
         generation += 1
         phase = .waitingForStable(
@@ -370,7 +366,8 @@ public struct PokemonSwitchDetector: Sendable {
                 detection,
                 changeWindow: [],
                 lastProbeAt: confirmedAt,
-                stableChangedCount: 0
+                stableChangedCount: 0,
+                nextVisualProbeAt: confirmedAt
             )
             var outputs: [LiveNameDetectionOutput] = []
             if let previous {

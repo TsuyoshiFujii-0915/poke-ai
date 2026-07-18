@@ -4,7 +4,7 @@ Require stable visible evidence before reporting a Pokémon transition
 
 # Status
 
-Accepted
+Superseded by [ADR-0004](0004-verify-visual-switches-with-ocr.md)
 
 # Context
 

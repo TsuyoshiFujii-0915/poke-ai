@@ -221,6 +221,7 @@ public enum LiveNameDetectionStatus: Equatable, Sendable {
 
 public enum LiveNameDetectionOutput: Equatable, Sendable {
     case requestRecognition(LiveNameRecognitionRequest)
+    case confirmedSignatureRefreshRequested(PokemonNameDetection)
     case statusChanged(LiveNameDetectionStatus)
     case pokemonConfirmed(PokemonNameDetection)
     case pokemonSwitched(previous: PokemonNameDetection, current: PokemonNameDetection)

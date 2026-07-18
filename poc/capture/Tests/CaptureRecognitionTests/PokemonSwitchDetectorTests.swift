@@ -71,7 +71,13 @@ struct PokemonSwitchDetectorTests {
         changed += try detector.consume(frame: frame(12, 1.2, previous: 0.01, confirmed: .score(0.4)))
         changed += try detector.consume(frame: frame(13, 1.3, previous: 0.01, confirmed: .score(0.4)))
         changed += try detector.consume(frame: frame(14, 1.4, previous: 0.01, confirmed: .score(0.4)))
-        #expect(changed.contains(.statusChanged(.transitioning(.player, first))))
+        #expect(!changed.contains(.statusChanged(.transitioning(.player, first))))
+        let visualProbe = try probeRequest(from: changed)
+        let verifiedChange = try detector.consume(recognition: recognition(
+            request: visualProbe,
+            outcome: .detected(second)
+        ))
+        #expect(verifiedChange.contains(.statusChanged(.transitioning(.player, first))))
 
         #expect(try detector.consume(frame: hiddenFrame(15, 1.5)).isEmpty)
         #expect(try detector.consume(frame: frame(16, 1.6, previous: 0.3, confirmed: .score(0.5))).isEmpty)
@@ -91,6 +97,66 @@ struct PokemonSwitchDetectorTests {
         }
 
         #expect(outputs.contains(.pokemonSwitched(previous: first, current: second)))
+    }
+
+    @Test
+    func refreshesBaselineWithoutTransitionWhenVisualProbeFindsCurrentPokemon() throws -> Void {
+        var detector = try makeDetector()
+        let current = detection(id: "Meowscarada", name: "マスカーニャ", distance: 0, confidence: 0.9)
+        _ = try completeInitialBurst(detector: &detector, outcomes: Array(repeating: .detected(current), count: 5))
+
+        var changed: [LiveNameDetectionOutput] = []
+        changed += try detector.consume(frame: frame(9, 0.9, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(10, 1.0, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(11, 1.1, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(12, 1.2, previous: 0.01, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(13, 1.3, previous: 0.01, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(14, 1.4, previous: 0.01, confirmed: .score(0.4)))
+        let request = try probeRequest(from: changed)
+
+        var whilePending: [LiveNameDetectionOutput] = []
+        whilePending += try detector.consume(frame: frame(15, 1.5, previous: 0.01, confirmed: .score(0.4)))
+        whilePending += try detector.consume(frame: frame(16, 1.6, previous: 0.01, confirmed: .score(0.4)))
+        whilePending += try detector.consume(frame: frame(17, 1.7, previous: 0.01, confirmed: .score(0.4)))
+        #expect(!whilePending.contains { if case .statusChanged(.transitioning) = $0 { return true }; return false })
+
+        let result = try detector.consume(recognition: recognition(
+            request: request,
+            outcome: .detected(current)
+        ))
+        #expect(result == [.confirmedSignatureRefreshRequested(current)])
+        #expect(!result.contains { if case .statusChanged(.transitioning) = $0 { return true }; return false })
+    }
+
+    @Test
+    func delaysVisualRetryAfterInconclusiveProbe() throws -> Void {
+        var detector = try makeDetector()
+        let current = detection(id: "Meowscarada", name: "マスカーニャ", distance: 0, confidence: 0.9)
+        _ = try completeInitialBurst(detector: &detector, outcomes: Array(repeating: .detected(current), count: 5))
+
+        var changed: [LiveNameDetectionOutput] = []
+        changed += try detector.consume(frame: frame(9, 0.9, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(10, 1.0, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(11, 1.1, previous: 0.4, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(12, 1.2, previous: 0.01, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(13, 1.3, previous: 0.01, confirmed: .score(0.4)))
+        changed += try detector.consume(frame: frame(14, 1.4, previous: 0.01, confirmed: .score(0.4)))
+        let request = try probeRequest(from: changed)
+        let inconclusive = try detector.consume(recognition: recognition(
+            request: request,
+            outcome: .noText(.player)
+        ))
+        #expect(inconclusive == [.probeRejected(.player, request.generation, .noText(.player))])
+
+        var beforeRetry: [LiveNameDetectionOutput] = []
+        beforeRetry += try detector.consume(frame: frame(15, 1.5, previous: 0.01, confirmed: .score(0.4)))
+        beforeRetry += try detector.consume(frame: frame(16, 1.6, previous: 0.01, confirmed: .score(0.4)))
+        beforeRetry += try detector.consume(frame: frame(17, 1.7, previous: 0.01, confirmed: .score(0.4)))
+        beforeRetry += try detector.consume(frame: frame(18, 4.3, previous: 0.01, confirmed: .score(0.4)))
+        #expect(!beforeRetry.contains { if case .requestRecognition = $0 { return true }; return false })
+
+        let retry = try detector.consume(frame: frame(19, 4.4, previous: 0.01, confirmed: .score(0.4)))
+        _ = try probeRequest(from: retry)
     }
 
     @Test

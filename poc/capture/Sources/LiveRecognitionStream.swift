@@ -62,6 +62,8 @@ private final class LiveRecognitionEventSink {
         switch output {
         case .requestRecognition:
             return
+        case .confirmedSignatureRefreshRequested:
+            return
         case let .statusChanged(status):
             emitStatus(status)
         case let .pokemonConfirmed(detection):
@@ -419,7 +421,10 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
                 )
             }
             for output in outputs {
-                if case let .statusChanged(.stable(side, detection)) = output {
+                if case let .confirmedSignatureRefreshRequested(detection) = output {
+                    analyzer.confirm(signature: signature, side: detection.side)
+                    clearDetectedSignatures(side: detection.side, through: request.generation)
+                } else if case let .statusChanged(.stable(side, detection)) = output {
                     let confirmedSignature = try signatureForConfirmedDetection(
                         detection,
                         generation: request.generation

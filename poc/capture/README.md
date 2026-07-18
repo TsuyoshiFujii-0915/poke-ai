@@ -66,7 +66,9 @@ The live detector processes the source `CVPixelBuffer` before JPEG encoding. Eac
 - A compact luminance signature is sampled at 8 Hz.
 - Hidden HUD frames never count as switch evidence.
 - Three changed samples in a five-sample window identify a possible change.
-- A transition starts only after three consecutive frames are visible, changed from the confirmed HUD, and stable relative to the preceding frame.
+- Three consecutive frames must be visible, changed from the confirmed HUD, and stable relative to the preceding frame before a background OCR probe starts.
+- The public state remains stable while the probe is pending. Only a confident exact match for a different Pokémon starts a transition.
+- A probe that finds the current Pokémon refreshes the comparison signature without emitting a duplicate event. An inconclusive probe discards the accumulated visual evidence and delays visual retry until the heartbeat interval.
 - OCR waits for three visually stable samples after the transition.
 - Confirmation uses five distinct frames, with up to three burst attempts.
 - Exact names require three votes. One-edit corrections require four votes and a confidence threshold.
