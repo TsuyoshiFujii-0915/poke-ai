@@ -244,7 +244,7 @@ swift run poke-capture-poc recognize-ipad-image \
 - 直近5サンプル中3回の変化で交代疑いへ遷移し、3サンプル連続で安定してからOCRを開始。
 - 1バーストは異なる5フレーム。完全一致は3票、1文字補正は4票かつ信頼度中央値の条件を満たした場合だけ確定。
 - 不成立時は最大3バーストまで再試行し、それでも確定できなければ`pokemon_detection_failed`を明示出力。
-- 3秒ごとの`.fast`プローブは交代候補の発見にだけ使い、単発結果ではBattleState更新イベントを出さない。
+- 3秒ごとの低頻度`.accurate`プローブは交代候補の発見にだけ使い、単発結果ではBattleState更新イベントを出さない。対象Visionランタイムの`.fast`は日本語非対応のため使用しない。
 - Visionは専用直列キューで実行し、キャプチャ・MJPEG配信キューをブロックしない。
 - OCRリクエストに世代IDを付け、演出再開などで無効になった遅延結果は`stale_recognition_rejected`として明示的に拒否。
 - `ipad-battle-hud-v1`と異なるアスペクト比・向きはエラーにし、iPhone / SwitchへROIを暗黙流用しない。

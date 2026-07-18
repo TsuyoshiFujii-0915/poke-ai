@@ -221,7 +221,7 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
 
     private let candidates: [PokemonNameCandidate]
     private let accurateRecognizer: PokemonNameRecognizer
-    private let fastRecognizer: PokemonNameRecognizer
+    private let probeRecognizer: PokemonNameRecognizer
     private let sampleInterval: TimeInterval
     private let stateQueue: DispatchQueue
     private let recognitionQueue = DispatchQueue(label: "recognition.vision")
@@ -279,13 +279,13 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
             maximumEditDistance: 1,
             recognitionMode: .accurate
         )
-        self.fastRecognizer = try PokemonNameRecognizer(
+        self.probeRecognizer = try PokemonNameRecognizer(
             regions: profile.nameRegions,
             recognitionLanguage: "ja-JP",
             maximumCandidateCount: 1,
             minimumTextHeight: 0.01,
             maximumEditDistance: 1,
-            recognitionMode: .fast
+            recognitionMode: .accurate
         )
     }
 
@@ -366,7 +366,7 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
                 let recognizer: PokemonNameRecognizer
                 switch request.kind {
                 case .probe:
-                    recognizer = fastRecognizer
+                    recognizer = probeRecognizer
                 case .confirmation:
                     recognizer = accurateRecognizer
                 }

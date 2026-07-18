@@ -16,7 +16,7 @@ The capture delegate currently receives source `CVPixelBuffer` frames on the sam
 
 Detect each battle side independently with an event-driven state machine.
 
-Sample a compact luminance signature from each normalized name region at 8 Hz. While a Pokémon is confirmed, compare new signatures with the confirmed baseline. Treat three changed samples in a five-sample window as a possible transition. Also issue a low-frequency probe every three seconds so a missed visual transition can be recovered.
+Sample a compact luminance signature from each normalized name region at 8 Hz. While a Pokémon is confirmed, compare new signatures with the confirmed baseline. Treat three changed samples in a five-sample window as a possible transition. Also issue a low-frequency accurate Japanese OCR probe every three seconds so a missed visual transition can be recovered. Japanese is not supported by Vision's fast recognition path in the target runtime.
 
 After a possible transition, wait until three consecutive sampled frames are visually stable. Then run accurate OCR on five distinct frames spaced over time. Confirm an exact catalog match when at least three results agree. Confirm a one-edit correction only when at least four results agree and their median Vision confidence meets the configured threshold. Ties and insufficient evidence remain explicitly unconfirmed.
 

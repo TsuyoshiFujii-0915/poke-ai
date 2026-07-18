@@ -68,7 +68,7 @@ The live detector processes the source `CVPixelBuffer` before JPEG encoding. Eac
 - OCR waits for three visually stable samples.
 - Confirmation uses five distinct frames, with up to three burst attempts.
 - Exact names require three votes. One-edit corrections require four votes and a confidence threshold.
-- A three-second fast probe recovers visual transitions that the signature detector missed.
+- A three-second accurate Japanese OCR probe recovers visual transitions that the signature detector missed. The target Vision runtime does not support Japanese in fast mode.
 - Vision runs on a dedicated serial queue, so OCR does not block capture or MJPEG encoding.
 - Results from an invalidated generation are reported as stale and cannot update the detected Pokémon.
 
