@@ -17,12 +17,14 @@ public struct PokemonSwitchDetector: Sendable {
         case stable(
             PokemonNameDetection,
             changeWindow: [Bool],
-            lastProbeAt: TimeInterval
+            lastProbeAt: TimeInterval,
+            stableChangedCount: Int
         )
         case probing(
             PokemonNameDetection,
             changeWindow: [Bool],
-            requestedAt: TimeInterval
+            requestedAt: TimeInterval,
+            stableChangedCount: Int
         )
     }
 
@@ -79,19 +81,21 @@ public struct PokemonSwitchDetector: Sendable {
                 attempt: attempt,
                 nextRecognitionAt: nextRecognitionAt
             )
-        case let .stable(current, changeWindow, lastProbeAt):
+        case let .stable(current, changeWindow, lastProbeAt, stableChangedCount):
             return try consumeStableFrame(
                 frame,
                 current: current,
                 changeWindow: changeWindow,
-                lastProbeAt: lastProbeAt
+                lastProbeAt: lastProbeAt,
+                stableChangedCount: stableChangedCount
             )
-        case let .probing(current, changeWindow, requestedAt):
+        case let .probing(current, changeWindow, requestedAt, stableChangedCount):
             return try consumeProbingFrame(
                 frame,
                 current: current,
                 changeWindow: changeWindow,
-                requestedAt: requestedAt
+                requestedAt: requestedAt,
+                stableChangedCount: stableChangedCount
             )
         }
     }
@@ -218,11 +222,18 @@ public struct PokemonSwitchDetector: Sendable {
         _ frame: NameRegionFrameObservation,
         current: PokemonNameDetection,
         changeWindow: [Bool],
-        lastProbeAt: TimeInterval
+        lastProbeAt: TimeInterval,
+        stableChangedCount: Int
     ) throws -> [LiveNameDetectionOutput] {
         let changed = try isChanged(frame)
         let nextWindow = append(changed, to: changeWindow)
-        if nextWindow.filter({ $0 }).count >= policy.changedSampleCount {
+        let nextStableChangedCount = stableChangedCountAfter(
+            frame: frame,
+            changed: changed,
+            currentCount: stableChangedCount
+        )
+        if nextWindow.filter({ $0 }).count >= policy.changedSampleCount,
+           nextStableChangedCount >= policy.stableSampleCount {
             generation += 1
             phase = .waitingForStable(
                 previous: current,
@@ -234,10 +245,20 @@ public struct PokemonSwitchDetector: Sendable {
         }
         if frame.monotonicTimestamp - lastProbeAt >= policy.heartbeatInterval {
             let request = makeRequest(frameID: frame.frameID, kind: .probe)
-            phase = .probing(current, changeWindow: nextWindow, requestedAt: frame.monotonicTimestamp)
+            phase = .probing(
+                current,
+                changeWindow: nextWindow,
+                requestedAt: frame.monotonicTimestamp,
+                stableChangedCount: nextStableChangedCount
+            )
             return [.requestRecognition(request)]
         }
-        phase = .stable(current, changeWindow: nextWindow, lastProbeAt: lastProbeAt)
+        phase = .stable(
+            current,
+            changeWindow: nextWindow,
+            lastProbeAt: lastProbeAt,
+            stableChangedCount: nextStableChangedCount
+        )
         return []
     }
 
@@ -245,10 +266,18 @@ public struct PokemonSwitchDetector: Sendable {
         _ frame: NameRegionFrameObservation,
         current: PokemonNameDetection,
         changeWindow: [Bool],
-        requestedAt: TimeInterval
+        requestedAt: TimeInterval,
+        stableChangedCount: Int
     ) throws -> [LiveNameDetectionOutput] {
-        let nextWindow = append(try isChanged(frame), to: changeWindow)
-        guard nextWindow.filter({ $0 }).count < policy.changedSampleCount else {
+        let changed = try isChanged(frame)
+        let nextWindow = append(changed, to: changeWindow)
+        let nextStableChangedCount = stableChangedCountAfter(
+            frame: frame,
+            changed: changed,
+            currentCount: stableChangedCount
+        )
+        guard nextWindow.filter({ $0 }).count < policy.changedSampleCount
+                || nextStableChangedCount < policy.stableSampleCount else {
             generation += 1
             pendingRequest = nil
             phase = .waitingForStable(
@@ -259,27 +288,47 @@ public struct PokemonSwitchDetector: Sendable {
             )
             return [.statusChanged(.transitioning(side, current))]
         }
-        phase = .probing(current, changeWindow: nextWindow, requestedAt: requestedAt)
+        phase = .probing(
+            current,
+            changeWindow: nextWindow,
+            requestedAt: requestedAt,
+            stableChangedCount: nextStableChangedCount
+        )
         return []
     }
 
     private mutating func consumeProbeResult(
         _ outcome: PokemonNameDetectionOutcome
     ) -> [LiveNameDetectionOutput] {
-        guard case let .probing(current, changeWindow, requestedAt) = phase else {
+        guard case let .probing(current, changeWindow, requestedAt, stableChangedCount) = phase else {
             return [.probeRejected(side, generation, outcome)]
         }
         guard case let .detected(detection) = outcome else {
-            phase = .stable(current, changeWindow: changeWindow, lastProbeAt: requestedAt)
+            phase = .stable(
+                current,
+                changeWindow: changeWindow,
+                lastProbeAt: requestedAt,
+                stableChangedCount: stableChangedCount
+            )
             return [.probeRejected(side, generation, outcome)]
         }
         guard detection.editDistance == 0,
               detection.visionConfidence >= policy.consensus.exactMatchMinimumMedianConfidence else {
-            phase = .stable(current, changeWindow: changeWindow, lastProbeAt: requestedAt)
+            phase = .stable(
+                current,
+                changeWindow: changeWindow,
+                lastProbeAt: requestedAt,
+                stableChangedCount: stableChangedCount
+            )
             return [.probeRejected(side, generation, outcome)]
         }
         guard detection.candidate.id != current.candidate.id else {
-            phase = .stable(current, changeWindow: [], lastProbeAt: requestedAt)
+            phase = .stable(
+                current,
+                changeWindow: [],
+                lastProbeAt: requestedAt,
+                stableChangedCount: 0
+            )
             return []
         }
         generation += 1
@@ -317,7 +366,12 @@ public struct PokemonSwitchDetector: Sendable {
             guard let confirmedAt = lastProcessedTimestamp else {
                 throw LiveNameDetectionError.missingProcessedFrameTimestamp
             }
-            phase = .stable(detection, changeWindow: [], lastProbeAt: confirmedAt)
+            phase = .stable(
+                detection,
+                changeWindow: [],
+                lastProbeAt: confirmedAt,
+                stableChangedCount: 0
+            )
             var outputs: [LiveNameDetectionOutput] = []
             if let previous {
                 if previous.candidate.id != detection.candidate.id {
@@ -375,13 +429,26 @@ public struct PokemonSwitchDetector: Sendable {
     }
 
     private func isChanged(_ frame: NameRegionFrameObservation) throws -> Bool {
-        guard frame.hudVisibility == .visible else { return true }
+        guard frame.hudVisibility == .visible else { return false }
         guard case let .score(score) = frame.differenceFromConfirmed else {
             throw LiveNameDetectionError.invalidPolicyRelation(
                 "differenceFromConfirmed is required while a Pokémon is stable"
             )
         }
         return score >= policy.changeDifferenceThreshold
+    }
+
+    private func stableChangedCountAfter(
+        frame: NameRegionFrameObservation,
+        changed: Bool,
+        currentCount: Int
+    ) -> Int {
+        guard frame.hudVisibility == .visible,
+              changed,
+              frame.differenceFromPrevious <= policy.stableDifferenceThreshold else {
+            return 0
+        }
+        return currentCount + 1
     }
 
     private func validate(frame: NameRegionFrameObservation) throws -> Void {

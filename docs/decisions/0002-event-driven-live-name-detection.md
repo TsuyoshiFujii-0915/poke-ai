@@ -4,7 +4,7 @@ Use event-driven temporal consensus for live Pokémon name detection
 
 # Status
 
-Accepted
+Superseded by [ADR-0003](0003-require-stable-visible-switch-evidence.md)
 
 # Context
 

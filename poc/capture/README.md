@@ -64,8 +64,10 @@ swift run poke-capture-poc recognize-stream \
 The live detector processes the source `CVPixelBuffer` before JPEG encoding. Each side is independent:
 
 - A compact luminance signature is sampled at 8 Hz.
-- Three changed samples in a five-sample window start a transition.
-- OCR waits for three visually stable samples.
+- Hidden HUD frames never count as switch evidence.
+- Three changed samples in a five-sample window identify a possible change.
+- A transition starts only after three consecutive frames are visible, changed from the confirmed HUD, and stable relative to the preceding frame.
+- OCR waits for three visually stable samples after the transition.
 - Confirmation uses five distinct frames, with up to three burst attempts.
 - Exact names require three votes. One-edit corrections require four votes and a confidence threshold.
 - A three-second accurate Japanese OCR probe recovers visual transitions that the signature detector missed. The target Vision runtime does not support Japanese in fast mode.
