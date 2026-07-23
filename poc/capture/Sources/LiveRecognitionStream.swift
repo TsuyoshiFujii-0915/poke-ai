@@ -57,6 +57,11 @@ private struct RecognitionPipelineFailureEvent: Encodable {
 private final class LiveRecognitionEventSink {
     private let encoder = JSONEncoder()
     private let formatter = ISO8601DateFormatter()
+    private let eventPublisher: (String) -> Void
+
+    init(eventPublisher: @escaping (String) -> Void) {
+        self.eventPublisher = eventPublisher
+    }
 
     func emit(output: LiveNameDetectionOutput) -> Void {
         switch output {
@@ -171,6 +176,7 @@ private final class LiveRecognitionEventSink {
                 throw RecognitionStreamError.eventEncodingFailed
             }
             print("EVENT_JSON \(json)")
+            eventPublisher(json)
         } catch {
             log("構造化認識イベントのエンコードに失敗: \(error)")
             exit(1)
@@ -227,15 +233,20 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
     private let sampleInterval: TimeInterval
     private let stateQueue: DispatchQueue
     private let recognitionQueue = DispatchQueue(label: "recognition.vision")
-    private let eventSink = LiveRecognitionEventSink()
+    private let eventSink: LiveRecognitionEventSink
     private var analyzer: LiveNameRegionAnalyzer
     private var detectors: [BattleSide: PokemonSwitchDetector]
     private var pendingSignatures: [PendingRecognitionKey: NameRegionSignature] = [:]
     private var detectedSignatures: [ConfirmedSignatureKey: DetectedSignature] = [:]
     private var lastAnalyzedTimestamp: TimeInterval?
     private var nextFrameID: UInt64 = 1
+    private var isActive = true
 
-    init(candidates: [PokemonNameCandidate], stateQueue: DispatchQueue) throws {
+    init(
+        candidates: [PokemonNameCandidate],
+        stateQueue: DispatchQueue,
+        eventPublisher: @escaping (String) -> Void
+    ) throws {
         let profile = try CaptureLayoutProfile.ipadBattleHUDV1()
         let consensus = try PokemonNameConsensusPolicy(
             exactMatchMinimumCount: 3,
@@ -267,6 +278,7 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
         )
         self.candidates = candidates
         self.stateQueue = stateQueue
+        self.eventSink = LiveRecognitionEventSink(eventPublisher: eventPublisher)
         self.sampleInterval = policy.sampleInterval
         self.analyzer = LiveNameRegionAnalyzer(extractor: extractor)
         self.detectors = [
@@ -292,6 +304,9 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
     }
 
     func receive(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer) -> Void {
+        guard isActive else {
+            return
+        }
         do {
             let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             let timestamp = CMTimeGetSeconds(presentationTime)
@@ -335,6 +350,12 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
         } catch {
             eventSink.emitFailure(error)
         }
+    }
+
+    func deactivate() -> Void {
+        isActive = false
+        pendingSignatures.removeAll()
+        detectedSignatures.removeAll()
     }
 
     private func handleFrameOutputs(
@@ -393,6 +414,9 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
         request: LiveNameRecognitionRequest,
         outcome: PokemonNameDetectionOutcome
     ) -> Void {
+        guard isActive else {
+            return
+        }
         do {
             let key = PendingRecognitionKey(side: request.side, requestID: request.requestID)
             guard let signature = pendingSignatures.removeValue(forKey: key) else {
@@ -485,6 +509,51 @@ final class LivePokemonNameDetector: CapturedFrameObserver {
     private func clearDetectedSignatures(side: BattleSide, through generation: UInt64) -> Void {
         detectedSignatures = detectedSignatures.filter { key, _ in
             key.side != side || key.generation > generation
+        }
+    }
+}
+
+final class ModeControlledPokemonNameObserver: CapturedFrameObserver, PokemonDetectionModeControlling {
+    private let candidates: [PokemonNameCandidate]
+    private let captureQueue: DispatchQueue
+    private let eventPublisher: (String) -> Void
+    private var detector: LivePokemonNameDetector?
+
+    init(
+        candidates: [PokemonNameCandidate],
+        captureQueue: DispatchQueue,
+        eventPublisher: @escaping (String) -> Void
+    ) throws {
+        self.candidates = candidates
+        self.captureQueue = captureQueue
+        self.eventPublisher = eventPublisher
+        self.detector = try LivePokemonNameDetector(
+            candidates: candidates,
+            stateQueue: captureQueue,
+            eventPublisher: eventPublisher
+        )
+    }
+
+    func receive(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer) -> Void {
+        detector?.receive(pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer)
+    }
+
+    func changeMode(to mode: PokemonDetectionMode) throws -> Void {
+        try captureQueue.sync {
+            switch mode {
+            case .automatic:
+                guard detector == nil else {
+                    return
+                }
+                detector = try LivePokemonNameDetector(
+                    candidates: candidates,
+                    stateQueue: captureQueue,
+                    eventPublisher: eventPublisher
+                )
+            case .manual:
+                detector?.deactivate()
+                detector = nil
+            }
         }
     }
 }

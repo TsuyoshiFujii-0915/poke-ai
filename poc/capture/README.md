@@ -53,7 +53,7 @@ Team selection, summary screens, and animation frames use different layouts or h
 
 ## Detect live name changes from an iPad capture
 
-The live command keeps the MJPEG stream on port 8787 and emits structured recognition events as `EVENT_JSON <json>` lines:
+The live command keeps the MJPEG stream on port 8787, exposes detection control on port 8788, and emits structured recognition events as `EVENT_JSON <json>` lines:
 
 ```bash
 swift run poke-capture-poc recognize-stream \
@@ -79,4 +79,6 @@ The live detector processes the source `CVPixelBuffer` before JPEG encoding. Eac
 
 The command accepts only the `ipad-battle-hud-v1` layout. A source with an incompatible aspect ratio or orientation fails explicitly. iPhone and Nintendo Switch layouts require separately measured profiles.
 
-Battle-state integration is not part of this PoC command yet. Consumers should parse only lines prefixed with `EVENT_JSON`; diagnostic logs use the existing timestamped format.
+The desktop UI receives the current mode and confirmed names from `http://127.0.0.1:8788/events`. It changes modes with `POST /mode/auto` and `POST /mode/manual`. Manual mode deactivates the detector without stopping the MJPEG stream. Returning to automatic mode creates a fresh detector and clears stale automatic names before initial recognition runs again.
+
+The control service accepts only the known desktop development and packaged-app origins. Diagnostic consumers of stdout should continue to parse only lines prefixed with `EVENT_JSON`; other logs use the existing timestamped format.

@@ -664,10 +664,18 @@ case "recognize-stream":
             japaneseNamesPath: args[3]
         )
         let captureQueue = DispatchQueue(label: "capture.frames")
-        let detector = try LivePokemonNameDetector(
+        let eventRelay = RecognitionEventRelay()
+        let detector = try ModeControlledPokemonNameObserver(
             candidates: candidates,
-            stateQueue: captureQueue
+            captureQueue: captureQueue,
+            eventPublisher: eventRelay.publish
         )
+        let controlServer = try DetectionControlServer(
+            port: 8_788,
+            modeController: detector
+        )
+        try eventRelay.install(handler: controlServer.publishRecognitionEvent)
+        controlServer.start()
         prepareCaptureEnvironment()
         guard let device = waitForDevice(timeoutSeconds: 20) else {
             log("デバイスが見つからなかったため認識配信を中止。")

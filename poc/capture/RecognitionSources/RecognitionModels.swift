@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-public enum BattleSide: String, Equatable, Hashable, Sendable {
+public enum BattleSide: String, Codable, Equatable, Hashable, Sendable {
     case player
     case opponent
 }
