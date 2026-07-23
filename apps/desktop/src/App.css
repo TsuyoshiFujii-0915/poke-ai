@@ -379,21 +379,13 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 24px;
+  gap: 36px;
 }
 
 .attack-row {
   display: flex;
   align-items: center;
   gap: 14px;
-}
-
-.move-stage-stack {
-  flex: 0 0 138px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
 }
 
 /* 技セレクタは攻撃側の色アクセントで帰属を示す（ラベルなし） */
@@ -553,19 +545,25 @@ body {
   margin: 0 24px;
 }
 
-.vs-defense-stage {
+.vs-stage-control {
   position: absolute;
   z-index: 2;
 }
 
-.vs-defense-stage.upper {
-  right: 0;
+.vs-stage-control.upper {
   bottom: calc(100% + 3px);
 }
 
-.vs-defense-stage.lower {
-  left: 0;
+.vs-stage-control.lower {
   top: calc(100% + 3px);
+}
+
+.vs-stage-control.leading {
+  left: 0;
+}
+
+.vs-stage-control.trailing {
+  right: 0;
 }
 
 .vs-divider::before,
