@@ -16,6 +16,7 @@
 
 import { calculate, Move, Pokemon, type State } from "@smogon/calc";
 import { gen, toID } from "./dex";
+import { toJapaneseKoText } from "./ko-text";
 import movePatch from "../data/champions-move-patch.json";
 
 /**
@@ -145,20 +146,6 @@ export function speedTiers(baseSpeed: number): SpeedTiers {
   return { noInvest, semi, max: Math.floor(semi * 1.1) };
 }
 
-/** Showdownの確定数テキストを日本語の慣用表現へ変換 */
-function toJaKoText(text: string): string {
-  if (!text) return "-";
-  if (/^guaranteed OHKO/.test(text)) return "確1";
-  let m = text.match(/^guaranteed (\d)HKO/);
-  if (m) return `確${m[1]}`;
-  m = text.match(/^([\d.]+)% chance to (\d)HKO/);
-  if (m) return `乱${m[2]} (${m[1]}%)`;
-  m = text.match(/^possible (\d)HKO/);
-  if (m) return `乱${m[1]}`;
-  if (/^possible OHKO/.test(text)) return "乱1";
-  return text;
-}
-
 function moveCategory(moveEn: string): "Physical" | "Special" | "Status" {
   const data = gen.moves.get(toID(moveEn) as never);
   return (data?.category ?? "Status") as "Physical" | "Special" | "Status";
@@ -171,7 +158,7 @@ function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: str
   const maxHP = result.defender.maxHP();
   let koText = "-";
   try {
-    koText = toJaKoText(result.kochance().text);
+    koText = toJapaneseKoText(result.kochance().text);
   } catch {
     koText = "-";
   }
