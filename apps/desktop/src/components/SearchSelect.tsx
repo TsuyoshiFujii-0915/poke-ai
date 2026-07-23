@@ -9,10 +9,11 @@ interface Props {
   placeholder: string;
   /** 選択済み値の表示名を返す */
   display: (en: string) => string;
+  disabled: boolean;
   limit?: number;
 }
 
-export function SearchSelect({ entries, value, onChange, placeholder, display, limit = 14 }: Props) {
+export function SearchSelect({ entries, value, onChange, placeholder, display, disabled, limit = 14 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
@@ -53,9 +54,10 @@ export function SearchSelect({ entries, value, onChange, placeholder, display, l
   };
 
   return (
-    <div className="search-select" ref={rootRef}>
+    <div className={`search-select ${disabled ? "disabled" : ""}`} ref={rootRef}>
       <input
         type="text"
+        disabled={disabled}
         value={open ? query : value ? display(value) : ""}
         placeholder={placeholder}
         onFocus={() => {
@@ -69,7 +71,7 @@ export function SearchSelect({ entries, value, onChange, placeholder, display, l
         }}
         onKeyDown={onKeyDown}
       />
-      <span className="caret">▾</span>
+      {!disabled && <span className="caret">▾</span>}
       {open && options.length > 0 && (
         <ul className="options">
           {options.map((opt, i) => (

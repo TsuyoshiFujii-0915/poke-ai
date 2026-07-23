@@ -5,7 +5,7 @@
 //   上段 = 自分の攻撃 → 相手の残りHP（右の相手カラムに隣接）
 //   下段 = 相手の攻撃 → 自分の残りHP（左の自分カラムに隣接）
 // 技は攻撃方向に固有なので、各段の攻撃側の端に置く。
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   calcMyAttack,
   calcOpponentAttack,
@@ -16,6 +16,7 @@ import {
 } from "../lib/calc";
 import { getArtworkId, getBaseSpeed, getLearnset, itemEntries, moveEntries, speciesEntries } from "../lib/dex";
 import { jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
+import { usePokemonDetection } from "../lib/use-pokemon-detection";
 import { HpBars } from "./HpBars";
 import { SearchSelect } from "./SearchSelect";
 
@@ -224,6 +225,21 @@ export function MatchupPanel() {
     points: { hp: 32, atk: 32, spe: 2 },
   });
   const [opp, setOpp] = useState<OpponentConfig>({ species: "", item: "", move: "" });
+  const detection = usePokemonDetection();
+
+  useEffect(() => {
+    setMe((current) => {
+      if (current.species === detection.selection.player) return current;
+      return { ...current, species: detection.selection.player, move: "" };
+    });
+  }, [detection.selection.player]);
+
+  useEffect(() => {
+    setOpp((current) => {
+      if (current.species === detection.selection.opponent) return current;
+      return { ...current, species: detection.selection.opponent, move: "" };
+    });
+  }, [detection.selection.opponent]);
 
   const myMoves = useMoveCandidates(me.species);
   const oppMoves = useMoveCandidates(opp.species);
@@ -233,6 +249,37 @@ export function MatchupPanel() {
 
   return (
     <div className="matchup-panel">
+      <div className="detection-mode-control" aria-label="ポケモン名の検出モード">
+        <span className="detection-mode-label">NAME</span>
+        <div className="detection-mode-toggle">
+          <button
+            type="button"
+            className={detection.selection.mode === "auto" ? "active" : ""}
+            disabled={detection.changingMode || !detection.synchronized}
+            onClick={() => void detection.changeMode("auto")}
+          >
+            自動
+          </button>
+          <button
+            type="button"
+            className={detection.selection.mode === "manual" ? "active" : ""}
+            disabled={detection.changingMode || !detection.synchronized}
+            onClick={() => void detection.changeMode("manual")}
+          >
+            手動
+          </button>
+        </div>
+        <span
+          className={`detection-connection ${detection.synchronized ? "connected" : "error"}`}
+          title={detection.error ?? "検出プロセスと接続済み"}
+          aria-label={detection.error ?? "検出プロセスと接続済み"}
+        />
+        {detection.error && (
+          <span className="detection-error" title={detection.error}>
+            連携エラー
+          </span>
+        )}
+      </div>
       {/* 左: 自分のポケモン。相手側と高さが対角対応するよう
           ポケモン名・持ち物を上、公式絵を中、能力ポイントを下に置く */}
       <div className="side-col mine">
@@ -241,9 +288,10 @@ export function MatchupPanel() {
             <SearchSelect
               entries={speciesEntries()}
               value={me.species}
-              onChange={(species) => setMe({ ...me, species, move: "" })}
+              onChange={(species) => detection.selectManualPokemon("player", species)}
               placeholder="自分のポケモン"
               display={jaSpecies}
+              disabled={detection.selection.mode === "auto"}
             />
           </IconRow>
           <IconRow icon="@">
@@ -253,6 +301,7 @@ export function MatchupPanel() {
               onChange={(item) => setMe({ ...me, item })}
               placeholder="持ち物なし"
               display={jaItem}
+              disabled={false}
             />
           </IconRow>
         </div>
@@ -269,6 +318,7 @@ export function MatchupPanel() {
             onChange={(move) => setMe({ ...me, move })}
             placeholder="自分の技"
             display={jaMove}
+            disabled={false}
           />
           <HpBars result={myAttack} />
         </div>
@@ -286,6 +336,7 @@ export function MatchupPanel() {
             onChange={(move) => setOpp({ ...opp, move })}
             placeholder="相手の技"
             display={jaMove}
+            disabled={false}
           />
         </div>
       </div>
@@ -299,9 +350,10 @@ export function MatchupPanel() {
             <SearchSelect
               entries={speciesEntries()}
               value={opp.species}
-              onChange={(species) => setOpp({ ...opp, species, move: "" })}
+              onChange={(species) => detection.selectManualPokemon("opponent", species)}
               placeholder="相手のポケモン"
               display={jaSpecies}
+              disabled={detection.selection.mode === "auto"}
             />
           </IconRow>
           <IconRow icon="@">
@@ -311,6 +363,7 @@ export function MatchupPanel() {
               onChange={(item) => setOpp({ ...opp, item })}
               placeholder="持ち物なし"
               display={jaItem}
+              disabled={false}
             />
           </IconRow>
         </div>

@@ -70,6 +70,81 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
+.detection-mode-control {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  z-index: 20;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 5px 2px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(8, 10, 18, 0.62);
+  color: rgba(143, 151, 173, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.detection-mode-label {
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.detection-mode-toggle {
+  display: flex;
+  padding: 1px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.detection-mode-toggle button {
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(143, 151, 173, 0.7);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.detection-mode-toggle button.active {
+  background: rgba(87, 179, 255, 0.14);
+  color: rgba(238, 241, 248, 0.9);
+}
+
+.detection-mode-toggle button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.detection-connection {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(143, 151, 173, 0.45);
+}
+
+.detection-connection.connected {
+  background: #56d69a;
+  box-shadow: 0 0 5px rgba(86, 214, 154, 0.55);
+}
+
+.detection-connection.error {
+  background: var(--opp);
+}
+
+.detection-error {
+  padding-right: 3px;
+  color: rgba(255, 93, 126, 0.85);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
 /* --- ゲーム画面 --- */
 .video-panel {
   position: relative;
@@ -529,6 +604,13 @@ body {
   outline: none;
   border-color: var(--mine);
   box-shadow: 0 0 0 3px rgba(87, 179, 255, 0.16);
+}
+
+.search-select.disabled input {
+  cursor: default;
+  color: rgba(238, 241, 248, 0.75);
+  background: rgba(8, 10, 18, 0.48);
+  border-style: dashed;
 }
 
 .search-select .caret {
