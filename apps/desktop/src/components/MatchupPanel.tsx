@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   calcMyAttack,
   calcOpponentAttack,
+  damageStageKeysForMove,
   speedTiers,
   type MySideConfig,
   type NatureStatKey,
@@ -18,12 +19,11 @@ import { getArtworkId, getBaseSpeed, getLearnset, itemEntries, moveEntries, spec
 import { jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
 import { normalizePointInput } from "../lib/point-input";
 import {
-  STAT_STAGE_KEYS,
   adjustStatStage,
   createNeutralStatStages,
-  type StatStageKey,
   type StatStages,
 } from "../lib/stat-stage";
+import type { DamageStageKey } from "../lib/damage-stage";
 import { usePokemonDetection } from "../lib/use-pokemon-detection";
 import { HpBars } from "./HpBars";
 import { SearchSelect } from "./SearchSelect";
@@ -122,19 +122,17 @@ function SpeedTiersLine({ species }: { species: string }) {
 const POINT_KEYS = ["hp", "atk", "def", "spa", "spd", "spe"] as const;
 type PointKey = (typeof POINT_KEYS)[number];
 const POINT_LABELS = { hp: "H", atk: "A", def: "B", spa: "C", spd: "D", spe: "S" } as const;
-const STAGE_LABELS: Record<StatStageKey, string> = {
+const DAMAGE_STAGE_LABELS: Record<DamageStageKey, string> = {
   atk: "A",
   def: "B",
   spa: "C",
   spd: "D",
-  spe: "S",
 };
-const STAGE_NAMES: Record<StatStageKey, string> = {
+const DAMAGE_STAGE_NAMES: Record<DamageStageKey, string> = {
   atk: "攻撃",
   def: "防御",
   spa: "特攻",
   spd: "特防",
-  spe: "素早さ",
 };
 
 /** 数値入力フォーカス時に出すクイック選択肢 */
@@ -247,43 +245,50 @@ function formatStatStage(value: number): string {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function StatStageInput({
-  side,
+function DamageStageCounter({
+  stageKey,
+  tone,
+  roleName,
   stages,
   onChange,
 }: {
-  side: "mine" | "opp";
+  stageKey: DamageStageKey | null;
+  tone: "mine" | "opp";
+  roleName: "攻撃側" | "防御側";
   stages: StatStages;
   onChange: (stages: StatStages) => void;
 }): ReactNode {
+  if (stageKey === null) {
+    return <div className="damage-stage-counter placeholder" aria-hidden="true" />;
+  }
+  const stage = stages[stageKey];
   return (
-    <div className={`stat-stages ${side}`} aria-label="能力ランク">
-      {STAT_STAGE_KEYS.map((key) => (
-        <div key={key} className={`stat-stage-cell ${stages[key] === 0 ? "" : "active"}`}>
-          <span className="stat-stage-label" title={STAGE_NAMES[key]}>{STAGE_LABELS[key]}</span>
-          <button
-            type="button"
-            className="stat-stage-button up"
-            disabled={stages[key] === 6}
-            aria-label={`${STAGE_NAMES[key]}ランクを上げる`}
-            onClick={() => onChange(adjustStatStage(stages, key, 1))}
-          >
-            ▲
-          </button>
-          <span className={`stat-stage-value ${stages[key] > 0 ? "positive" : stages[key] < 0 ? "negative" : ""}`}>
-            {formatStatStage(stages[key])}
-          </span>
-          <button
-            type="button"
-            className="stat-stage-button down"
-            disabled={stages[key] === -6}
-            aria-label={`${STAGE_NAMES[key]}ランクを下げる`}
-            onClick={() => onChange(adjustStatStage(stages, key, -1))}
-          >
-            ▼
-          </button>
-        </div>
-      ))}
+    <div
+      className={`damage-stage-counter ${tone} ${stage === 0 ? "" : "active"}`}
+      aria-label={`${roleName}の${DAMAGE_STAGE_NAMES[stageKey]}ランク`}
+    >
+      <span className="damage-stage-label">{DAMAGE_STAGE_LABELS[stageKey]}</span>
+      <button
+        type="button"
+        className="damage-stage-button"
+        disabled={stage === 6}
+        aria-label={`${roleName}の${DAMAGE_STAGE_NAMES[stageKey]}ランクを上げる`}
+        onClick={() => onChange(adjustStatStage(stages, stageKey, 1))}
+      >
+        ▲
+      </button>
+      <span className={`damage-stage-value ${stage > 0 ? "positive" : stage < 0 ? "negative" : ""}`}>
+        {formatStatStage(stage)}
+      </span>
+      <button
+        type="button"
+        className="damage-stage-button"
+        disabled={stage === -6}
+        aria-label={`${roleName}の${DAMAGE_STAGE_NAMES[stageKey]}ランクを下げる`}
+        onClick={() => onChange(adjustStatStage(stages, stageKey, -1))}
+      >
+        ▼
+      </button>
     </div>
   );
 }
@@ -320,6 +325,8 @@ export function MatchupPanel() {
 
   const myMoves = useMoveCandidates(me.species);
   const oppMoves = useMoveCandidates(opp.species);
+  const myStageKeys = useMemo(() => damageStageKeysForMove(me.move ?? ""), [me.move]);
+  const oppStageKeys = useMemo(() => damageStageKeysForMove(opp.move ?? ""), [opp.move]);
 
   const myAttack = useMemo(() => calcMyAttack(me, opp), [me, opp]);
   const oppAttack = useMemo(() => calcOpponentAttack(me, opp), [me, opp]);
@@ -375,11 +382,6 @@ export function MatchupPanel() {
             />
           </IconRow>
         </div>
-        <StatStageInput
-          side="mine"
-          stages={me.stages}
-          onChange={(stages) => setMe((current) => ({ ...current, stages }))}
-        />
         <PokemonArt species={me.species} side="mine" />
         <PointsInput me={me} onChange={(patch) => setMe({ ...me, ...patch })} />
       </div>
@@ -387,15 +389,31 @@ export function MatchupPanel() {
       {/* 中央上段: 自分の攻撃 → 相手の残りHP */}
       <div className="attack-col">
         <div className="attack-row mine">
-          <SearchSelect
-            entries={myMoves}
-            value={me.move ?? ""}
-            onChange={(move) => setMe({ ...me, move })}
-            placeholder="自分の技"
-            display={jaMove}
-            disabled={false}
-          />
+          <div className="move-stage-stack">
+            <SearchSelect
+              entries={myMoves}
+              value={me.move ?? ""}
+              onChange={(move) => setMe({ ...me, move })}
+              placeholder="自分の技"
+              display={jaMove}
+              disabled={false}
+            />
+            <DamageStageCounter
+              stageKey={myStageKeys?.attacker ?? null}
+              tone="mine"
+              roleName="攻撃側"
+              stages={me.stages}
+              onChange={(stages) => setMe((current) => ({ ...current, stages }))}
+            />
+          </div>
           <HpBars result={myAttack} />
+          <DamageStageCounter
+            stageKey={myStageKeys?.defender ?? null}
+            tone="opp"
+            roleName="防御側"
+            stages={opp.stages}
+            onChange={(stages) => setOpp((current) => ({ ...current, stages }))}
+          />
         </div>
 
         <div className="vs-divider" aria-hidden="true">
@@ -404,26 +422,37 @@ export function MatchupPanel() {
 
         {/* 中央下段: 相手の攻撃 → 自分の残りHP */}
         <div className="attack-row opp">
-          <HpBars result={oppAttack} />
-          <SearchSelect
-            entries={oppMoves}
-            value={opp.move ?? ""}
-            onChange={(move) => setOpp({ ...opp, move })}
-            placeholder="相手の技"
-            display={jaMove}
-            disabled={false}
+          <DamageStageCounter
+            stageKey={oppStageKeys?.defender ?? null}
+            tone="mine"
+            roleName="防御側"
+            stages={me.stages}
+            onChange={(stages) => setMe((current) => ({ ...current, stages }))}
           />
+          <HpBars result={oppAttack} />
+          <div className="move-stage-stack">
+            <SearchSelect
+              entries={oppMoves}
+              value={opp.move ?? ""}
+              onChange={(move) => setOpp({ ...opp, move })}
+              placeholder="相手の技"
+              display={jaMove}
+              disabled={false}
+            />
+            <DamageStageCounter
+              stageKey={oppStageKeys?.attacker ?? null}
+              tone="opp"
+              roleName="攻撃側"
+              stages={opp.stages}
+              onChange={(stages) => setOpp((current) => ({ ...current, stages }))}
+            />
+          </div>
         </div>
       </div>
 
       {/* Opponent artwork followed by Speed tiers, species, and held item. */}
       <div className="side-col opp">
         <PokemonArt species={opp.species} side="opp" />
-        <StatStageInput
-          side="opp"
-          stages={opp.stages}
-          onChange={(stages) => setOpp((current) => ({ ...current, stages }))}
-        />
         <SpeedTiersLine species={opp.species} />
         <div className="side-fields">
           <IconRow icon={<BallIcon />}>

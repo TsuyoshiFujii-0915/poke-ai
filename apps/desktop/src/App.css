@@ -388,6 +388,14 @@ body {
   gap: 14px;
 }
 
+.move-stage-stack {
+  flex: 0 0 138px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
 /* 技セレクタは攻撃側の色アクセントで帰属を示す（ラベルなし） */
 .attack-row.mine .search-select input {
   border-left: 3px solid var(--mine);
@@ -744,53 +752,47 @@ body {
   white-space: nowrap;
 }
 
-/* --- 能力ランク（A/B/C/D/S、-6〜+6） --- */
-.stat-stages {
+/* --- ダメージ計算に使う攻撃側／防御側の能力ランク --- */
+.damage-stage-counter {
   --stage-accent: var(--muted);
-  display: flex;
-  justify-content: center;
-  align-items: stretch;
-  padding: 2px 5px;
-  background: rgba(10, 12, 20, 0.62);
+  flex: none;
+  width: 54px;
+  height: 19px;
+  display: grid;
+  grid-template-columns: 11px 9px 24px 9px;
+  place-items: center;
+  padding: 0 3px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 999px;
+  background: rgba(10, 12, 20, 0.62);
 }
 
-.stat-stages.mine {
+.damage-stage-counter.mine {
   --stage-accent: var(--mine);
 }
 
-.stat-stages.opp {
+.damage-stage-counter.opp {
   --stage-accent: var(--opp);
 }
 
-.stat-stage-cell {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  grid-template-rows: 9px 9px 17px 9px;
-  place-items: center;
-  border-radius: 6px;
+.damage-stage-counter.active {
+  border-color: color-mix(in srgb, var(--stage-accent) 38%, var(--border));
+  background: color-mix(in srgb, var(--stage-accent) 8%, rgba(10, 12, 20, 0.62));
 }
 
-.stat-stage-cell.active {
-  background: color-mix(in srgb, var(--stage-accent) 8%, transparent);
+.damage-stage-counter.placeholder {
+  visibility: hidden;
 }
 
-.stat-stage-label {
-  color: rgba(143, 151, 173, 0.72);
-  font-size: 8px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.stat-stage-cell.active .stat-stage-label {
+.damage-stage-label {
   color: var(--stage-accent);
+  font-size: 8px;
+  font-weight: 800;
 }
 
-.stat-stage-button {
-  width: 100%;
-  height: 9px;
+.damage-stage-button {
+  width: 9px;
+  height: 17px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -800,28 +802,27 @@ body {
   cursor: pointer;
 }
 
-.stat-stage-button:hover:not(:disabled) {
+.damage-stage-button:hover:not(:disabled) {
   color: var(--text);
 }
 
-.stat-stage-button:disabled {
-  opacity: 0.18;
+.damage-stage-button:disabled {
+  opacity: 0.16;
   cursor: default;
 }
 
-.stat-stage-value {
+.damage-stage-value {
   color: rgba(238, 241, 248, 0.82);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 17px;
   font-variant-numeric: tabular-nums;
 }
 
-.stat-stage-value.positive {
+.damage-stage-value.positive {
   color: var(--gold);
 }
 
-.stat-stage-value.negative {
+.damage-stage-value.negative {
   color: #6ea8ff;
 }
 

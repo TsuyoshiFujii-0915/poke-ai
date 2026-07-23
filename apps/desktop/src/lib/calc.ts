@@ -15,6 +15,10 @@
 // - 相手→自分（相手の火力想定）: 無振り / +32 / +32+性格1.1倍
 
 import { calculate, Move, Pokemon, type State } from "@smogon/calc";
+import {
+  stageKeysForDamageCategory,
+  type DamageStageKeys,
+} from "./damage-stage";
 import { gen, toID } from "./dex";
 import { toJapaneseKoText } from "./ko-text";
 import { validateStatStages, type StatStages } from "./stat-stage";
@@ -159,6 +163,11 @@ export function speedTiers(baseSpeed: number): SpeedTiers {
 function moveCategory(moveEn: string): "Physical" | "Special" | "Status" {
   const data = gen.moves.get(toID(moveEn) as never);
   return (data?.category ?? "Status") as "Physical" | "Special" | "Status";
+}
+
+export function damageStageKeysForMove(moveEn: string): DamageStageKeys | null {
+  if (!moveEn) return null;
+  return stageKeysForDamageCategory(moveCategory(moveEn));
 }
 
 function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: string): PresetResult {
