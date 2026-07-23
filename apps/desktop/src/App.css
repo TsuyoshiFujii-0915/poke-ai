@@ -744,6 +744,87 @@ body {
   white-space: nowrap;
 }
 
+/* --- 能力ランク（A/B/C/D/S、-6〜+6） --- */
+.stat-stages {
+  --stage-accent: var(--muted);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  padding: 2px 5px;
+  background: rgba(10, 12, 20, 0.62);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.stat-stages.mine {
+  --stage-accent: var(--mine);
+}
+
+.stat-stages.opp {
+  --stage-accent: var(--opp);
+}
+
+.stat-stage-cell {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 9px 9px 17px 9px;
+  place-items: center;
+  border-radius: 6px;
+}
+
+.stat-stage-cell.active {
+  background: color-mix(in srgb, var(--stage-accent) 8%, transparent);
+}
+
+.stat-stage-label {
+  color: rgba(143, 151, 173, 0.72);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stat-stage-cell.active .stat-stage-label {
+  color: var(--stage-accent);
+}
+
+.stat-stage-button {
+  width: 100%;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(143, 151, 173, 0.42);
+  font-size: 6px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stat-stage-button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.stat-stage-button:disabled {
+  opacity: 0.18;
+  cursor: default;
+}
+
+.stat-stage-value {
+  color: rgba(238, 241, 248, 0.82);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-stage-value.positive {
+  color: var(--gold);
+}
+
+.stat-stage-value.negative {
+  color: #6ea8ff;
+}
+
 /* --- 能力ポイント入力 ---
    セグメント型: 上から ステータス文字 / ▲ / 数値 / ▼。
    ▲▼は性格補正トグル（▲=1.1倍, ▼=0.9倍）。HPはプレースホルダーで桁を揃える */

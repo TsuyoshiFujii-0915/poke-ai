@@ -17,6 +17,7 @@
 import { calculate, Move, Pokemon, type State } from "@smogon/calc";
 import { gen, toID } from "./dex";
 import { toJapaneseKoText } from "./ko-text";
+import { validateStatStages, type StatStages } from "./stat-stage";
 import movePatch from "../data/champions-move-patch.json";
 
 /**
@@ -60,6 +61,7 @@ export interface MySideConfig {
   item?: string;
   move?: string;
   points: ChampionPoints;
+  stages: StatStages;
   /** 性格補正で1.1倍にするステータス（未指定 = 上昇補正なし） */
   plusStat?: NatureStatKey;
   /** 性格補正で0.9倍にするステータス（未指定 = 下降補正なし） */
@@ -71,6 +73,7 @@ export interface OpponentConfig {
   species: string;
   item?: string;
   move?: string;
+  stages: StatStages;
 }
 
 export interface PresetResult {
@@ -97,12 +100,18 @@ export interface DirectionResult {
  */
 export function championsPokemon(
   species: string,
-  opts: { points?: ChampionPoints; mods?: NatureMods; item?: string },
+  opts: {
+    points?: ChampionPoints;
+    mods?: NatureMods;
+    item?: string;
+    stages: StatStages;
+  },
 ): Pokemon {
   const data = gen.species.get(toID(species) as never);
   if (!data) throw new Error(`unknown species: ${species}`);
   const p = opts.points ?? {};
   const mods = opts.mods ?? {};
+  validateStatStages(opts.stages);
   const withMod = (key: NatureStatKey): number => {
     const base = data.baseStats[key] + (p[key] ?? 0);
     const mod = mods.plus === key ? 1.1 : mods.minus === key ? 0.9 : 1.0;
@@ -116,6 +125,7 @@ export function championsPokemon(
     nature: "Hardy",
     ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
     evs: {},
+    boosts: opts.stages,
     overrides: {
       baseStats: {
         hp: data.baseStats.hp + (p.hp ?? 0),
@@ -193,11 +203,16 @@ export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionRe
       points: me.points,
       mods: { plus: me.plusStat, minus: me.minusStat },
       item: me.item,
+      stages: me.stages,
     });
     return {
       moveEn: me.move,
       presets: presets.map(([label, points]) => {
-        const defender = championsPokemon(opp.species, { points, item: opp.item });
+        const defender = championsPokemon(opp.species, {
+          points,
+          item: opp.item,
+          stages: opp.stages,
+        });
         return runOne(attacker, defender, me.move!, label);
       }),
     };
@@ -229,11 +244,17 @@ export function calcOpponentAttack(me: MySideConfig, opp: OpponentConfig): Direc
       points: me.points,
       mods: { plus: me.plusStat, minus: me.minusStat },
       item: me.item,
+      stages: me.stages,
     });
     return {
       moveEn: opp.move,
       presets: presets.map(([label, points, mods]) => {
-        const attacker = championsPokemon(opp.species, { points, mods, item: opp.item });
+        const attacker = championsPokemon(opp.species, {
+          points,
+          mods,
+          item: opp.item,
+          stages: opp.stages,
+        });
         return runOne(attacker, defender, opp.move!, label);
       }),
     };

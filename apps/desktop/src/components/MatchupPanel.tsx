@@ -17,6 +17,13 @@ import {
 import { getArtworkId, getBaseSpeed, getLearnset, itemEntries, moveEntries, speciesEntries } from "../lib/dex";
 import { jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
 import { normalizePointInput } from "../lib/point-input";
+import {
+  STAT_STAGE_KEYS,
+  adjustStatStage,
+  createNeutralStatStages,
+  type StatStageKey,
+  type StatStages,
+} from "../lib/stat-stage";
 import { usePokemonDetection } from "../lib/use-pokemon-detection";
 import { HpBars } from "./HpBars";
 import { SearchSelect } from "./SearchSelect";
@@ -115,6 +122,20 @@ function SpeedTiersLine({ species }: { species: string }) {
 const POINT_KEYS = ["hp", "atk", "def", "spa", "spd", "spe"] as const;
 type PointKey = (typeof POINT_KEYS)[number];
 const POINT_LABELS = { hp: "H", atk: "A", def: "B", spa: "C", spd: "D", spe: "S" } as const;
+const STAGE_LABELS: Record<StatStageKey, string> = {
+  atk: "A",
+  def: "B",
+  spa: "C",
+  spd: "D",
+  spe: "S",
+};
+const STAGE_NAMES: Record<StatStageKey, string> = {
+  atk: "攻撃",
+  def: "防御",
+  spa: "特攻",
+  spd: "特防",
+  spe: "素早さ",
+};
 
 /** 数値入力フォーカス時に出すクイック選択肢 */
 const QUICK_POINT_VALUES = [0, 32] as const;
@@ -222,14 +243,65 @@ function PointsInput({ me, onChange }: {
   );
 }
 
+function formatStatStage(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function StatStageInput({
+  side,
+  stages,
+  onChange,
+}: {
+  side: "mine" | "opp";
+  stages: StatStages;
+  onChange: (stages: StatStages) => void;
+}): ReactNode {
+  return (
+    <div className={`stat-stages ${side}`} aria-label="能力ランク">
+      {STAT_STAGE_KEYS.map((key) => (
+        <div key={key} className={`stat-stage-cell ${stages[key] === 0 ? "" : "active"}`}>
+          <span className="stat-stage-label" title={STAGE_NAMES[key]}>{STAGE_LABELS[key]}</span>
+          <button
+            type="button"
+            className="stat-stage-button up"
+            disabled={stages[key] === 6}
+            aria-label={`${STAGE_NAMES[key]}ランクを上げる`}
+            onClick={() => onChange(adjustStatStage(stages, key, 1))}
+          >
+            ▲
+          </button>
+          <span className={`stat-stage-value ${stages[key] > 0 ? "positive" : stages[key] < 0 ? "negative" : ""}`}>
+            {formatStatStage(stages[key])}
+          </span>
+          <button
+            type="button"
+            className="stat-stage-button down"
+            disabled={stages[key] === -6}
+            aria-label={`${STAGE_NAMES[key]}ランクを下げる`}
+            onClick={() => onChange(adjustStatStage(stages, key, -1))}
+          >
+            ▼
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function MatchupPanel() {
   const [me, setMe] = useState<MySideConfig>({
     species: "",
     item: "",
     move: "",
     points: { hp: 32, atk: 32, spe: 2 },
+    stages: createNeutralStatStages(),
   });
-  const [opp, setOpp] = useState<OpponentConfig>({ species: "", item: "", move: "" });
+  const [opp, setOpp] = useState<OpponentConfig>({
+    species: "",
+    item: "",
+    move: "",
+    stages: createNeutralStatStages(),
+  });
   const detection = usePokemonDetection();
 
   useEffect(() => {
@@ -303,6 +375,11 @@ export function MatchupPanel() {
             />
           </IconRow>
         </div>
+        <StatStageInput
+          side="mine"
+          stages={me.stages}
+          onChange={(stages) => setMe((current) => ({ ...current, stages }))}
+        />
         <PokemonArt species={me.species} side="mine" />
         <PointsInput me={me} onChange={(patch) => setMe({ ...me, ...patch })} />
       </div>
@@ -342,6 +419,11 @@ export function MatchupPanel() {
       {/* Opponent artwork followed by Speed tiers, species, and held item. */}
       <div className="side-col opp">
         <PokemonArt species={opp.species} side="opp" />
+        <StatStageInput
+          side="opp"
+          stages={opp.stages}
+          onChange={(stages) => setOpp((current) => ({ ...current, stages }))}
+        />
         <SpeedTiersLine species={opp.species} />
         <div className="side-fields">
           <IconRow icon={<BallIcon />}>
