@@ -407,28 +407,32 @@ export function MatchupPanel() {
             />
           </div>
           <HpBars result={myAttack} />
-          <DamageStageCounter
-            stageKey={myStageKeys?.defender ?? null}
-            tone="opp"
-            roleName="防御側"
-            stages={opp.stages}
-            onChange={(stages) => setOpp((current) => ({ ...current, stages }))}
-          />
         </div>
 
-        <div className="vs-divider" aria-hidden="true">
-          <span className="vs-badge">VS</span>
+        <div className="vs-divider">
+          <div className="vs-defense-stage upper">
+            <DamageStageCounter
+              stageKey={myStageKeys?.defender ?? null}
+              tone="opp"
+              roleName="防御側"
+              stages={opp.stages}
+              onChange={(stages) => setOpp((current) => ({ ...current, stages }))}
+            />
+          </div>
+          <span className="vs-badge" aria-hidden="true">VS</span>
+          <div className="vs-defense-stage lower">
+            <DamageStageCounter
+              stageKey={oppStageKeys?.defender ?? null}
+              tone="mine"
+              roleName="防御側"
+              stages={me.stages}
+              onChange={(stages) => setMe((current) => ({ ...current, stages }))}
+            />
+          </div>
         </div>
 
         {/* 中央下段: 相手の攻撃 → 自分の残りHP */}
         <div className="attack-row opp">
-          <DamageStageCounter
-            stageKey={oppStageKeys?.defender ?? null}
-            tone="mine"
-            roleName="防御側"
-            stages={me.stages}
-            onChange={(stages) => setMe((current) => ({ ...current, stages }))}
-          />
           <HpBars result={oppAttack} />
           <div className="move-stage-stack">
             <SearchSelect

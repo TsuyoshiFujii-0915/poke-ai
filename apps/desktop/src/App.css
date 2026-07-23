@@ -553,6 +553,21 @@ body {
   margin: 0 24px;
 }
 
+.vs-defense-stage {
+  position: absolute;
+  z-index: 2;
+}
+
+.vs-defense-stage.upper {
+  right: 0;
+  bottom: calc(100% + 3px);
+}
+
+.vs-defense-stage.lower {
+  left: 0;
+  top: calc(100% + 3px);
+}
+
 .vs-divider::before,
 .vs-divider::after {
   content: "";
@@ -756,15 +771,17 @@ body {
 .damage-stage-counter {
   --stage-accent: var(--muted);
   flex: none;
-  width: 54px;
+  box-sizing: border-box;
+  width: 60px;
   height: 19px;
   display: grid;
-  grid-template-columns: 11px 9px 24px 9px;
+  grid-template-columns: 10px 9px 22px 9px;
   place-items: center;
-  padding: 0 3px;
+  padding: 0 4px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(10, 12, 20, 0.62);
+  overflow: hidden;
 }
 
 .damage-stage-counter.mine {
