@@ -77,6 +77,8 @@ The live detector processes the source `CVPixelBuffer` before JPEG encoding. Eac
 - Vision runs on a dedicated serial queue, so OCR does not block capture or MJPEG encoding.
 - Results from an invalidated generation are reported as stale and cannot update the detected Pokémon.
 
+The command monitors incoming frames with a monotonic clock. If the capture session stops or no frame arrives for five seconds, it stops the old session, rediscovers the external screen-capture device, and builds a replacement session while keeping ports 8787 and 8788 alive. An active OCR detector is recreated before frames resume so timestamps and visual baselines from separate sessions cannot mix. Recovery retries until the device is available; a capture-process crash still requires relaunching the command.
+
 The command accepts only the `ipad-battle-hud-v1` layout. A source with an incompatible aspect ratio or orientation fails explicitly. iPhone and Nintendo Switch layouts require separately measured profiles.
 
 The desktop UI receives the current mode and confirmed names from `http://127.0.0.1:8788/events`. It changes modes with `POST /mode/auto` and `POST /mode/manual`. Manual mode deactivates the detector without stopping the MJPEG stream. Returning to automatic mode creates a fresh detector and clears stale automatic names before initial recognition runs again.

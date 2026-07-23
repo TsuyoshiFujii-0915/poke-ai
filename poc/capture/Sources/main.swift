@@ -341,6 +341,7 @@ final class MJPEGServer {
 final class StreamCollector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private let server: MJPEGServer
     private let frameObserver: CapturedFrameObserver
+    private let recoveryWatchdog: CaptureRecoveryWatchdog
     private let scale: CGFloat
     private let quality: CGFloat
     private let minFrameInterval: TimeInterval
@@ -361,18 +362,26 @@ final class StreamCollector: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         scale: CGFloat,
         quality: CGFloat,
         targetFps: Double,
-        frameObserver: CapturedFrameObserver
+        frameObserver: CapturedFrameObserver,
+        recoveryWatchdog: CaptureRecoveryWatchdog
     ) {
         self.server = server
         self.scale = scale
         self.quality = quality
         self.minFrameInterval = 1.0 / targetFps
         self.frameObserver = frameObserver
+        self.recoveryWatchdog = recoveryWatchdog
     }
 
     func captureOutput(_ output: AVCaptureOutput,
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
+        do {
+            try recoveryWatchdog.recordFrameNow()
+        } catch {
+            log("エラー: キャプチャ監視時刻の記録に失敗: \(error)")
+            exit(1)
+        }
         inputFrames += 1
         let now = Date()
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -415,6 +424,68 @@ final class StreamCollector: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     }
 }
 
+private enum StreamCaptureError: Error, CustomStringConvertible {
+    case cannotAddInput(String)
+    case cannotAddOutput(String)
+    case sessionDidNotStart(String)
+
+    var description: String {
+        switch self {
+        case let .cannotAddInput(deviceName):
+            return "capture input could not be added for device '\(deviceName)'"
+        case let .cannotAddOutput(deviceName):
+            return "capture output could not be added for device '\(deviceName)'"
+        case let .sessionDidNotStart(deviceName):
+            return "capture session did not start for device '\(deviceName)'"
+        }
+    }
+}
+
+private func makeStreamCaptureSession(
+    device: AVCaptureDevice,
+    collector: StreamCollector,
+    captureQueue: DispatchQueue
+) throws -> AVCaptureSession {
+    let session = AVCaptureSession()
+    let input = try AVCaptureDeviceInput(device: device)
+    guard session.canAddInput(input) else {
+        throw StreamCaptureError.cannotAddInput(device.localizedName)
+    }
+    session.addInput(input)
+
+    let output = AVCaptureVideoDataOutput()
+    output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+    output.alwaysDiscardsLateVideoFrames = true
+    output.setSampleBufferDelegate(collector, queue: captureQueue)
+    guard session.canAddOutput(output) else {
+        throw StreamCaptureError.cannotAddOutput(device.localizedName)
+    }
+    session.addOutput(output)
+    return session
+}
+
+private func startStreamCaptureSession(
+    device: AVCaptureDevice,
+    collector: StreamCollector,
+    captureQueue: DispatchQueue,
+    sessionQueue: DispatchQueue,
+    recoveryWatchdog: CaptureRecoveryWatchdog
+) throws -> AVCaptureSession {
+    let session = try makeStreamCaptureSession(
+        device: device,
+        collector: collector,
+        captureQueue: captureQueue
+    )
+    try recoveryWatchdog.markSessionStartedNow()
+    sessionQueue.sync {
+        session.startRunning()
+    }
+    guard session.isRunning else {
+        throw StreamCaptureError.sessionDidNotStart(device.localizedName)
+    }
+    return session
+}
+
 func runStream(
     device: AVCaptureDevice,
     port: UInt16,
@@ -433,46 +504,75 @@ func runStream(
     }
     server.start()
 
-    let session = AVCaptureSession()
+    let recoveryWatchdog: CaptureRecoveryWatchdog
+    do {
+        recoveryWatchdog = try CaptureRecoveryWatchdog(stallTimeout: 5.0)
+    } catch {
+        log("エラー: キャプチャ復旧監視の初期化に失敗: \(error)")
+        exit(1)
+    }
     let collector = StreamCollector(
         server: server,
         scale: scale,
         quality: quality,
         targetFps: targetFps,
-        frameObserver: frameObserver
+        frameObserver: frameObserver,
+        recoveryWatchdog: recoveryWatchdog
     )
+    let sessionQueue = DispatchQueue(label: "capture.session")
+    var session: AVCaptureSession
 
     do {
-        let input = try AVCaptureDeviceInput(device: device)
-        guard session.canAddInput(input) else {
-            log("エラー: 入力を追加できない")
-            exit(1)
-        }
-        session.addInput(input)
+        session = try startStreamCaptureSession(
+            device: device,
+            collector: collector,
+            captureQueue: captureQueue,
+            sessionQueue: sessionQueue,
+            recoveryWatchdog: recoveryWatchdog
+        )
     } catch {
-        log("エラー: AVCaptureDeviceInput 作成失敗: \(error.localizedDescription)")
+        log("エラー: キャプチャセッション開始失敗: \(error)")
         exit(1)
     }
-
-    let output = AVCaptureVideoDataOutput()
-    output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-    output.alwaysDiscardsLateVideoFrames = true
-    output.setSampleBufferDelegate(collector, queue: captureQueue)
-    guard session.canAddOutput(output) else {
-        log("エラー: 出力を追加できない")
-        exit(1)
-    }
-    session.addOutput(output)
-
-    session.startRunning()
     log("配信開始: http://127.0.0.1:\(port)/stream (scale=\(scale), quality=\(quality), 上限\(Int(targetFps))fps)")
+    log("自動復旧: 5秒間フレームが届かなければキャプチャセッションを再接続")
     log("停止: Ctrl+C")
 
     while true {
         RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(1.0))
-        if !session.isRunning {
-            log("警告: セッションが停止した")
+        let stalled: Bool
+        do {
+            stalled = try recoveryWatchdog.shouldRecoverNow()
+        } catch {
+            log("エラー: キャプチャ停止判定に失敗: \(error)")
             exit(1)
+        }
+        guard !stalled, session.isRunning else {
+            let reason = stalled ? "5秒間フレーム未受信" : "セッション停止"
+            log("警告: \(reason)を検知。自動再接続を開始")
+            sessionQueue.sync {
+                if session.isRunning {
+                    session.stopRunning()
+                }
+            }
+            guard let replacementDevice = waitForDevice(timeoutSeconds: 5) else {
+                log("警告: 再接続先が見つからないため5秒後に再試行")
+                continue
+            }
+            do {
+                try frameObserver.captureDidRestart()
+                session = try startStreamCaptureSession(
+                    device: replacementDevice,
+                    collector: collector,
+                    captureQueue: captureQueue,
+                    sessionQueue: sessionQueue,
+                    recoveryWatchdog: recoveryWatchdog
+                )
+                log("キャプチャセッションの自動再接続に成功: \(replacementDevice.localizedName)")
+            } catch {
+                log("警告: キャプチャセッションの自動再接続に失敗: \(error)。再試行する")
+            }
+            continue
         }
     }
 }

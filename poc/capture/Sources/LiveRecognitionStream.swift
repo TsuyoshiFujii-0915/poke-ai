@@ -6,10 +6,12 @@ import ImageIO
 
 protocol CapturedFrameObserver: AnyObject {
     func receive(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer) -> Void
+    func captureDidRestart() throws -> Void
 }
 
 final class IgnoringCapturedFrameObserver: CapturedFrameObserver {
     func receive(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer) -> Void {}
+    func captureDidRestart() throws -> Void {}
 }
 
 private struct DetectionStatusEvent: Encodable {
@@ -210,7 +212,7 @@ enum RecognitionStreamError: Error, CustomStringConvertible {
     }
 }
 
-final class LivePokemonNameDetector: CapturedFrameObserver {
+final class LivePokemonNameDetector {
     private struct PendingRecognitionKey: Hashable {
         let side: BattleSide
         let requestID: UInt64
@@ -536,6 +538,20 @@ final class ModeControlledPokemonNameObserver: CapturedFrameObserver, PokemonDet
 
     func receive(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer) -> Void {
         detector?.receive(pixelBuffer: pixelBuffer, sampleBuffer: sampleBuffer)
+    }
+
+    func captureDidRestart() throws -> Void {
+        try captureQueue.sync {
+            guard detector != nil else {
+                return
+            }
+            detector?.deactivate()
+            detector = try LivePokemonNameDetector(
+                candidates: candidates,
+                stateQueue: captureQueue,
+                eventPublisher: eventPublisher
+            )
+        }
     }
 
     func changeMode(to mode: PokemonDetectionMode) throws -> Void {
