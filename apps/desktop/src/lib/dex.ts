@@ -39,6 +39,12 @@ export function getArtworkId(nameEn: string): number | null {
   return (artworkIds as Record<string, number>)[nameEn] ?? null;
 }
 
+/** Returns base Speed, or null when the species is absent from @smogon/calc. */
+export function getBaseSpeed(nameEn: string): number | null {
+  const species = gen.species.get(toID(nameEn) as never);
+  return species ? species.baseStats.spe : null;
+}
+
 /**
  * チャンピオンズでの習得技（英語名リスト）を返す。
  * メガシンカ等のフォームは「完全一致 → 最初のハイフン前のベース種」の

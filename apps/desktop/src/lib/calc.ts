@@ -128,6 +128,23 @@ export function championsPokemon(
   });
 }
 
+/** Speed benchmarks for Pokémon Champions at level 50 with a perfect IV. */
+export interface SpeedTiers {
+  /** Zero points with a neutral nature. */
+  noInvest: number;
+  /** 32 points with a neutral nature. */
+  semi: number;
+  /** 32 points with a Speed-boosting nature. */
+  max: number;
+}
+
+export function speedTiers(baseSpeed: number): SpeedTiers {
+  // At level 50 with a perfect IV, the final stat is base Speed + points + 20.
+  const noInvest = baseSpeed + 20;
+  const semi = baseSpeed + 32 + 20;
+  return { noInvest, semi, max: Math.floor(semi * 1.1) };
+}
+
 /** Showdownの確定数テキストを日本語の慣用表現へ変換 */
 function toJaKoText(text: string): string {
   if (!text) return "-";

@@ -138,6 +138,18 @@ console.log("=== 1. 能力ポイント(+32) → 実数値 ===\n");
   );
 }
 
+// Speed tiers use the same formula as the UI: Garchomp base 102 -> 122/154/169.
+{
+  const noInvest = championsStat(102, 0, 1.0, false);
+  const semi = championsStat(102, 32, 1.0, false);
+  const max = championsStat(102, 32, 1.1, false);
+  check(
+    "素早さ目安: S102 → 122/154/169",
+    noInvest === 122 && semi === 154 && max === 169,
+    `${noInvest}/${semi}/${max}`,
+  );
+}
+
 // 最大投資の最終実数値は、従来作のLv50・EV252と一致する。
 // ただし入力体系・途中配分・合計上限は別物なのでUIではEVへ変換しない。
 {

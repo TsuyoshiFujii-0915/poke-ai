@@ -9,11 +9,12 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   calcMyAttack,
   calcOpponentAttack,
+  speedTiers,
   type MySideConfig,
   type NatureStatKey,
   type OpponentConfig,
 } from "../lib/calc";
-import { getArtworkId, getLearnset, itemEntries, moveEntries, speciesEntries } from "../lib/dex";
+import { getArtworkId, getBaseSpeed, getLearnset, itemEntries, moveEntries, speciesEntries } from "../lib/dex";
 import { jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
 import { HpBars } from "./HpBars";
 import { SearchSelect } from "./SearchSelect";
@@ -58,11 +59,12 @@ function IconRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   );
 }
 
-/** ポケモン公式絵（PokeAPI official-artwork）。自分側は相手に向くよう左右反転 */
+/** Renders mirrored official artwork and a base Speed badge for either battle side. */
 function PokemonArt({ species, side }: { species: string; side: "mine" | "opp" }) {
   const artworkId = species ? getArtworkId(species) : null;
+  const baseSpeed = species ? getBaseSpeed(species) : null;
   return (
-    <div className={`poke-art ${side}`} aria-hidden="true">
+    <div className={`poke-art ${side}`}>
       {artworkId ? (
         <img
           src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${artworkId}.png`}
@@ -70,8 +72,40 @@ function PokemonArt({ species, side }: { species: string; side: "mine" | "opp" }
           draggable={false}
         />
       ) : (
-        <span className="poke-art-placeholder">?</span>
+        <span className="poke-art-placeholder" aria-hidden="true">?</span>
       )}
+      {baseSpeed !== null && (
+        <span className="speed-badge" title="S種族値">
+          <span className="stat-letter">S</span>
+          {baseSpeed}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Renders the opponent's uninvested, neutral-max, and positive-max Speed tiers. */
+function SpeedTiersLine({ species }: { species: string }) {
+  const baseSpeed = species ? getBaseSpeed(species) : null;
+  if (baseSpeed === null) return null;
+  const tiers = speedTiers(baseSpeed);
+  const cells: Array<[string, number]> = [
+    ["0", tiers.noInvest],
+    ["+32", tiers.semi],
+    ["MAX", tiers.max],
+  ];
+  return (
+    <div className="speed-line" title="素早さ実数値の目安（Lv50・IV31）: 無振り / 準速 / 最速">
+      <span className="spe-label">SPEED</span>
+      {cells.map(([label, value], i) => (
+        <span key={label} className="tier-group">
+          {i > 0 && <span className="slash" aria-hidden="true">/</span>}
+          <span className="tier">
+            <em>{label}</em>
+            <b>{value}</b>
+          </span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -256,9 +290,10 @@ export function MatchupPanel() {
         </div>
       </div>
 
-      {/* 右: 相手のポケモン。公式絵を上、ポケモン名・持ち物を下に置く */}
+      {/* Opponent artwork followed by Speed tiers, species, and held item. */}
       <div className="side-col opp">
         <PokemonArt species={opp.species} side="opp" />
+        <SpeedTiersLine species={opp.species} />
         <div className="side-fields">
           <IconRow icon={<BallIcon />}>
             <SearchSelect

@@ -332,11 +332,103 @@ body {
    固定基準の高さ（狭いときは縮む）。flex-growさせないことで
    カラム全体が中央にまとまり、上下に余白が生まれる */
 .poke-art {
+  position: relative;
   flex: 0 1 140px;
   min-height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Place mirrored base Speed badges near the center edge of each artwork panel.
+   Keep the persistent information visually subdued. */
+.speed-badge {
+  position: absolute;
+  bottom: 4px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(10, 12, 20, 0.72);
+  border: 1px solid var(--border);
+  color: rgba(238, 241, 248, 0.82);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(6px);
+}
+
+.poke-art.mine .speed-badge {
+  right: 6px;
+}
+
+.poke-art.opp .speed-badge {
+  left: 6px;
+}
+
+.speed-badge .stat-letter {
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(143, 151, 173, 0.7);
+  line-height: 1;
+}
+
+/* Show the opponent's uninvested, neutral-max, and positive-max Speed tiers.
+   Align the label and separators with the numeric baseline. */
+.speed-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  padding: 1px 0;
+}
+
+.speed-line .spe-label {
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: rgba(143, 151, 173, 0.55);
+  line-height: 1;
+  padding: 0 2px 1px 0;
+}
+
+.speed-line .tier-group {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.speed-line .tier {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.speed-line .tier em {
+  font-style: normal;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(143, 151, 173, 0.55);
+  line-height: 1;
+}
+
+.speed-line .tier b {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(238, 241, 248, 0.82);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.speed-line .slash {
+  color: rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1;
+  transform: skewX(-14deg);
 }
 
 .poke-art.opp {
