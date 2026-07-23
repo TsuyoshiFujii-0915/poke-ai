@@ -16,6 +16,7 @@ import {
 } from "../lib/calc";
 import { getArtworkId, getBaseSpeed, getLearnset, itemEntries, moveEntries, speciesEntries } from "../lib/dex";
 import { jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
+import { normalizePointInput } from "../lib/point-input";
 import { usePokemonDetection } from "../lib/use-pokemon-detection";
 import { HpBars } from "./HpBars";
 import { SearchSelect } from "./SearchSelect";
@@ -133,9 +134,9 @@ function PointsInput({ me, onChange }: {
 }) {
   const [focusedKey, setFocusedKey] = useState<PointKey | null>(null);
   const total = POINT_KEYS.reduce((sum, key) => sum + (me.points[key] ?? 0), 0);
-  const set = (key: PointKey, rawValue: number) => {
+  const set = (key: PointKey, rawValue: number): void => {
     const withoutCurrent = total - (me.points[key] ?? 0);
-    const value = Math.max(0, Math.min(32, 66 - withoutCurrent, rawValue || 0));
+    const value = Math.max(0, Math.min(32, 66 - withoutCurrent, rawValue));
     onChange({ points: { ...me.points, [key]: value }, plusStat: me.plusStat, minusStat: me.minusStat });
   };
 
@@ -182,7 +183,11 @@ function PointsInput({ me, onChange }: {
             min={0}
             max={32}
             value={me.points[key] ?? 0}
-            onChange={(e) => set(key, Number(e.target.value))}
+            onChange={(event) => {
+              const normalized = normalizePointInput(event.currentTarget.value);
+              event.currentTarget.value = normalized;
+              set(key, Number(normalized));
+            }}
             onFocus={(e) => {
               setFocusedKey(key);
               e.target.select();
@@ -250,33 +255,26 @@ export function MatchupPanel() {
   return (
     <div className="matchup-panel">
       <div className="detection-mode-control" aria-label="ポケモン名の検出モード">
-        <span className="detection-mode-label">NAME</span>
-        <div className="detection-mode-toggle">
-          <button
-            type="button"
-            className={detection.selection.mode === "auto" ? "active" : ""}
-            disabled={detection.changingMode || !detection.synchronized}
-            onClick={() => void detection.changeMode("auto")}
-          >
-            自動
-          </button>
-          <button
-            type="button"
-            className={detection.selection.mode === "manual" ? "active" : ""}
-            disabled={detection.changingMode || !detection.synchronized}
-            onClick={() => void detection.changeMode("manual")}
-          >
-            手動
-          </button>
-        </div>
-        <span
-          className={`detection-connection ${detection.synchronized ? "connected" : "error"}`}
-          title={detection.error ?? "検出プロセスと接続済み"}
-          aria-label={detection.error ?? "検出プロセスと接続済み"}
+        <span className="detection-mode-label">AUTO</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={detection.selection.mode === "auto"}
+          aria-label="画面からポケモン名を自動検出"
+          className={`detection-auto-switch ${detection.selection.mode === "auto" ? "active" : ""}`}
+          disabled={detection.changingMode || !detection.synchronized}
+          title={detection.selection.mode === "auto" ? "自動検出中" : "自動検出停止中"}
+          onClick={() => void detection.changeMode(
+            detection.selection.mode === "auto" ? "manual" : "auto",
+          )}
         />
         {detection.error && (
-          <span className="detection-error" title={detection.error}>
-            連携エラー
+          <span
+            className="detection-error"
+            title={detection.error}
+            aria-label={detection.error}
+          >
+            !
           </span>
         )}
       </div>
@@ -288,10 +286,10 @@ export function MatchupPanel() {
             <SearchSelect
               entries={speciesEntries()}
               value={me.species}
-              onChange={(species) => detection.selectManualPokemon("player", species)}
+              onChange={(species) => detection.selectPokemon("player", species)}
               placeholder="自分のポケモン"
               display={jaSpecies}
-              disabled={detection.selection.mode === "auto"}
+              disabled={false}
             />
           </IconRow>
           <IconRow icon="@">
@@ -350,10 +348,10 @@ export function MatchupPanel() {
             <SearchSelect
               entries={speciesEntries()}
               value={opp.species}
-              onChange={(species) => detection.selectManualPokemon("opponent", species)}
+              onChange={(species) => detection.selectPokemon("opponent", species)}
               placeholder="相手のポケモン"
               display={jaSpecies}
-              disabled={detection.selection.mode === "auto"}
+              disabled={false}
             />
           </IconRow>
           <IconRow icon="@">

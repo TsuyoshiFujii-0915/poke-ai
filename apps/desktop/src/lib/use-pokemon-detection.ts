@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   applyAutomaticDetection,
-  applyManualSelection,
   applyServerSnapshot,
+  applyUserSelection,
   createDetectionSelectionState,
   parseDetectionServerMessage,
   type DetectionMode,
@@ -18,7 +18,7 @@ export interface PokemonDetectionControl {
   changingMode: boolean;
   error: string | null;
   changeMode: (mode: DetectionMode) => Promise<void>;
-  selectManualPokemon: (side: DetectionSide, pokemon: string) => void;
+  selectPokemon: (side: DetectionSide, pokemon: string) => void;
 }
 
 export function usePokemonDetection(): PokemonDetectionControl {
@@ -83,9 +83,9 @@ export function usePokemonDetection(): PokemonDetectionControl {
     }
   }, []);
 
-  const selectManualPokemon = useCallback(
+  const selectPokemon = useCallback(
     (side: DetectionSide, pokemon: string): void => {
-      setSelection((current) => applyManualSelection(current, side, pokemon));
+      setSelection((current) => applyUserSelection(current, side, pokemon));
     },
     [],
   );
@@ -96,7 +96,7 @@ export function usePokemonDetection(): PokemonDetectionControl {
     changingMode,
     error,
     changeMode,
-    selectManualPokemon,
+    selectPokemon,
   };
 }
 

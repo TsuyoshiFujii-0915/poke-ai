@@ -50,8 +50,8 @@ export function applyServerSnapshot(
   }
   return {
     mode: "auto",
-    player: snapshot.player?.pokemon ?? "",
-    opponent: snapshot.opponent?.pokemon ?? "",
+    player: snapshot.player?.pokemon ?? state.player,
+    opponent: snapshot.opponent?.pokemon ?? state.opponent,
   };
 }
 
@@ -66,14 +66,11 @@ export function applyAutomaticDetection(
   return { ...state, [side]: pokemon };
 }
 
-export function applyManualSelection(
+export function applyUserSelection(
   state: DetectionSelectionState,
   side: DetectionSide,
   pokemon: string,
 ): DetectionSelectionState {
-  if (state.mode !== "manual") {
-    throw new Error("manual selection requires manual detection mode");
-  }
   return { ...state, [side]: pokemon };
 }
 

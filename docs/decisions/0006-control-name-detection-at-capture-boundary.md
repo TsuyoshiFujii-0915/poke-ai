@@ -4,7 +4,7 @@ Control Pokémon name detection at the capture boundary
 
 # Status
 
-Accepted
+Superseded by [ADR-0007](0007-decouple-name-editing-from-detection-mode.md)
 
 # Context
 

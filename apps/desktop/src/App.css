@@ -78,8 +78,8 @@ body {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 5px 2px 7px;
+  gap: 5px;
+  padding: 3px 5px 3px 7px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   background: rgba(8, 10, 18, 0.62);
@@ -93,56 +93,50 @@ body {
   letter-spacing: 0.14em;
 }
 
-.detection-mode-toggle {
-  display: flex;
-  padding: 1px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.detection-mode-toggle button {
-  height: 20px;
-  padding: 0 8px;
+.detection-auto-switch {
+  position: relative;
+  width: 22px;
+  height: 12px;
+  padding: 0;
   border: 0;
   border-radius: 999px;
-  background: transparent;
-  color: rgba(143, 151, 173, 0.7);
-  font: inherit;
-  font-size: 9px;
+  background: rgba(143, 151, 173, 0.18);
   cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 
-.detection-mode-toggle button.active {
-  background: rgba(87, 179, 255, 0.14);
-  color: rgba(238, 241, 248, 0.9);
+.detection-auto-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(238, 241, 248, 0.45);
+  transition: transform 0.15s, background 0.15s;
 }
 
-.detection-mode-toggle button:disabled {
+.detection-auto-switch.active {
+  background: rgba(87, 179, 255, 0.68);
+  box-shadow: 0 0 6px rgba(87, 179, 255, 0.48);
+}
+
+.detection-auto-switch.active::after {
+  transform: translateX(10px);
+  background: #fff;
+}
+
+.detection-auto-switch:disabled {
   cursor: default;
   opacity: 0.5;
 }
 
-.detection-connection {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgba(143, 151, 173, 0.45);
-}
-
-.detection-connection.connected {
-  background: #56d69a;
-  box-shadow: 0 0 5px rgba(86, 214, 154, 0.55);
-}
-
-.detection-connection.error {
-  background: var(--opp);
-}
-
 .detection-error {
-  padding-right: 3px;
   color: rgba(255, 93, 126, 0.85);
-  font-size: 8px;
-  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 /* --- ゲーム画面 --- */

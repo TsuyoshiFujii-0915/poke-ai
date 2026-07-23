@@ -2,32 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyAutomaticDetection,
-  applyManualSelection,
   applyServerSnapshot,
+  applyUserSelection,
   createDetectionSelectionState,
   type DetectionServerSnapshot,
 } from "../src/lib/detection-state.ts";
 
 test("manual mode accepts typed selections and blocks automatic replacements", () => {
   const manual = createDetectionSelectionState("manual", "Meowscarada", "Garchomp");
-  const selected = applyManualSelection(manual, "opponent", "Lucario-Mega");
+  const selected = applyUserSelection(manual, "opponent", "Lucario-Mega");
   const afterAutomaticEvent = applyAutomaticDetection(selected, "opponent", "Dragonite");
 
   assert.equal(selected.opponent, "Lucario-Mega");
   assert.deepEqual(afterAutomaticEvent, selected);
 });
 
-test("automatic mode accepts recognized names and rejects manual selections", () => {
+test("automatic mode accepts both recognized names and user selections", () => {
   const automatic = createDetectionSelectionState("auto", "", "");
 
-  assert.equal(
-    applyAutomaticDetection(automatic, "player", "Meowscarada").player,
-    "Meowscarada",
-  );
-  assert.throws(
-    () => applyManualSelection(automatic, "player", "Lucario"),
-    /manual selection requires manual detection mode/,
-  );
+  const recognized = applyAutomaticDetection(automatic, "player", "Meowscarada");
+  const corrected = applyUserSelection(recognized, "player", "Lucario");
+
+  assert.equal(recognized.player, "Meowscarada");
+  assert.equal(corrected.player, "Lucario");
 });
 
 test("a manual server snapshot preserves current names", () => {
@@ -45,7 +42,7 @@ test("a manual server snapshot preserves current names", () => {
   );
 });
 
-test("a fresh automatic snapshot replaces stale manual names", () => {
+test("a fresh automatic snapshot preserves names until detection finishes", () => {
   const current = createDetectionSelectionState("manual", "Lucario-Mega", "Garchomp-Mega");
   const snapshot: DetectionServerSnapshot = {
     type: "detection_state",
@@ -56,6 +53,6 @@ test("a fresh automatic snapshot replaces stale manual names", () => {
 
   assert.deepEqual(
     applyServerSnapshot(current, snapshot),
-    createDetectionSelectionState("auto", "", ""),
+    createDetectionSelectionState("auto", "Lucario-Mega", "Garchomp-Mega"),
   );
 });
