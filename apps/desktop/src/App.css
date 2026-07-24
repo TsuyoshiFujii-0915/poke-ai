@@ -770,10 +770,10 @@ body {
   --stage-accent: var(--muted);
   flex: none;
   box-sizing: border-box;
-  width: 60px;
+  width: 66px;
   height: 19px;
   display: grid;
-  grid-template-columns: 10px 9px 22px 9px;
+  grid-template-columns: 10px 15px 22px 9px;
   place-items: center;
   padding: 0 4px;
   border: 1px solid var(--border);
