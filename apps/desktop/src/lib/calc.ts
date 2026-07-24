@@ -14,7 +14,7 @@
 // - 自分→相手（相手の耐久想定）: 無振り / H+32 / H+32・耐久+32
 // - 相手→自分（相手の火力想定）: 無振り / +32 / +32+性格1.1倍
 
-import { calculate, Move, Pokemon, type State } from "@smogon/calc";
+import { calculate, Field, Move, Pokemon, type State } from "@smogon/calc";
 import { resolveAbilityForDamage, type DamageRole } from "./ability-calculation";
 import { validateAbilitySelection } from "./ability-selection";
 import {
@@ -36,8 +36,28 @@ import movePatch from "../data/champions-move-patch.json";
 const CHAMPIONS_MOVE_OVERRIDES = movePatch as Record<string, State.Move["overrides"]>;
 
 /** チャンピオンズ差分パッチを適用したMoveを作る */
-function championsMove(moveEn: string): Move {
-  return new Move(gen, moveEn, { overrides: CHAMPIONS_MOVE_OVERRIDES[moveEn] });
+function championsMove(moveEn: string, attackerAbility: string): Move {
+  const move = new Move(gen, moveEn, { overrides: CHAMPIONS_MOVE_OVERRIDES[moveEn] });
+  if (attackerAbility !== "Dragonize") return move;
+
+  const cannotChangeType = new Set([
+    "Judgment",
+    "Multi-Attack",
+    "Natural Gift",
+    "Revelation Dance",
+    "Techno Blast",
+    "Terrain Pulse",
+    "Weather Ball",
+    "Struggle",
+  ]);
+  if (!move.hasType("Normal") || cannotChangeType.has(move.originalName)) return move;
+  if (move.named("Flail")) {
+    throw new Error("unsupported Champions damage ability: Dragonize with Flail");
+  }
+
+  move.type = "Dragon";
+  move.bp = Math.floor((move.bp * 4915) / 4096 + 0.5);
+  return move;
 }
 
 export const LEVEL = 50;
@@ -186,13 +206,33 @@ function applyDamageAbility(pokemon: Pokemon, role: DamageRole): Pokemon {
   return prepared;
 }
 
+function prepareAttackerAbility(pokemon: Pokemon): Pokemon {
+  if (pokemon.ability !== "Dragonize" && pokemon.ability !== "Mega Sol") {
+    return applyDamageAbility(pokemon, "attacker");
+  }
+  const prepared = pokemon.clone();
+  prepared.ability = undefined;
+  prepared.abilityOn = false;
+  return prepared;
+}
+
+function championsField(move: Move, attackerAbility: string): Field {
+  const megaSolUsesSun = attackerAbility === "Mega Sol" && (
+    move.originalName === "Weather Ball" || move.hasType("Fire", "Water")
+  );
+  return new Field(megaSolUsesSun ? { weather: "Sun" } : {});
+}
+
 function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: string): PresetResult {
-  const move = championsMove(moveEn);
+  if (!attacker.ability) throw new Error("attacker ability is not selected");
+  const attackerAbility = attacker.ability;
+  const move = championsMove(moveEn, attackerAbility);
   const result = calculate(
     gen,
-    applyDamageAbility(attacker, "attacker"),
+    prepareAttackerAbility(attacker),
     applyDamageAbility(defender, "defender"),
     move,
+    championsField(move, attackerAbility),
   );
   const range = result.range();
   const maxHP = result.defender.maxHP();
