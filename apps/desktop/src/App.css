@@ -33,7 +33,7 @@ body {
 /* レイアウト: ゲーム画面 65% / ダメ計 35%（最低220px）、右に広めのコンパニオン枠 */
 .app-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 372px;
   grid-template-rows: minmax(0, 13fr) minmax(220px, 7fr);
   grid-template-areas:
     "game sidebar"
@@ -692,7 +692,7 @@ body {
 
 .hp-bar-row {
   display: grid;
-  grid-template-columns: 64px minmax(140px, 1fr) 94px 74px;
+  grid-template-columns: 64px minmax(120px, 1fr) 94px 74px;
   align-items: center;
   gap: 8px;
   font-variant-numeric: tabular-nums;
