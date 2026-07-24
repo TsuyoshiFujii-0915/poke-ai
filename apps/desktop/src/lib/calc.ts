@@ -15,11 +15,13 @@
 // - 相手→自分（相手の火力想定）: 無振り / +32 / +32+性格1.1倍
 
 import { calculate, Move, Pokemon, type State } from "@smogon/calc";
+import { resolveAbilityForDamage, type DamageRole } from "./ability-calculation";
+import { validateAbilitySelection } from "./ability-selection";
 import {
   stageKeysForDamageCategory,
   type DamageStageKeys,
 } from "./damage-stage";
-import { gen, toID } from "./dex";
+import { gen, getAbilityNames, toID } from "./dex";
 import { toJapaneseKoText } from "./ko-text";
 import { validateStatStages, type StatStages } from "./stat-stage";
 import movePatch from "../data/champions-move-patch.json";
@@ -62,6 +64,7 @@ export interface NatureMods {
 /** 自分側の設定（実際の育成が分かっている側） */
 export interface MySideConfig {
   species: string;
+  ability: string;
   item?: string;
   move?: string;
   points: ChampionPoints;
@@ -75,6 +78,7 @@ export interface MySideConfig {
 /** 相手側の設定（型が不明な側） */
 export interface OpponentConfig {
   species: string;
+  ability: string;
   item?: string;
   move?: string;
   stages: StatStages;
@@ -108,6 +112,7 @@ export function championsPokemon(
     points?: ChampionPoints;
     mods?: NatureMods;
     item?: string;
+    ability: string;
     stages: StatStages;
   },
 ): Pokemon {
@@ -115,6 +120,7 @@ export function championsPokemon(
   if (!data) throw new Error(`unknown species: ${species}`);
   const p = opts.points ?? {};
   const mods = opts.mods ?? {};
+  validateAbilitySelection(species, opts.ability, getAbilityNames(species));
   validateStatStages(opts.stages);
   const withMod = (key: NatureStatKey): number => {
     const base = data.baseStats[key] + (p[key] ?? 0);
@@ -125,6 +131,7 @@ export function championsPokemon(
   };
   return new Pokemon(gen, species, {
     level: LEVEL,
+    ability: opts.ability as State.Pokemon["ability"],
     item: opts.item || undefined,
     nature: "Hardy",
     ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
@@ -170,9 +177,23 @@ export function damageStageKeysForMove(moveEn: string): DamageStageKeys | null {
   return stageKeysForDamageCategory(moveCategory(moveEn));
 }
 
+function applyDamageAbility(pokemon: Pokemon, role: DamageRole): Pokemon {
+  if (!pokemon.ability) throw new Error(`${role} ability is not selected`);
+  const resolved = resolveAbilityForDamage(pokemon.ability, role);
+  const prepared = pokemon.clone();
+  prepared.ability = resolved.ability as State.Pokemon["ability"];
+  prepared.abilityOn = resolved.abilityOn;
+  return prepared;
+}
+
 function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: string): PresetResult {
   const move = championsMove(moveEn);
-  const result = calculate(gen, attacker, defender, move);
+  const result = calculate(
+    gen,
+    applyDamageAbility(attacker, "attacker"),
+    applyDamageAbility(defender, "defender"),
+    move,
+  );
   const range = result.range();
   const maxHP = result.defender.maxHP();
   let koText = "-";
@@ -194,6 +215,9 @@ export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionRe
   if (!me.species || !opp.species || !me.move) {
     return { moveEn: me.move ?? "", presets: [], error: "入力待ち" };
   }
+  if (!me.ability || !opp.ability) {
+    return { moveEn: me.move, presets: [], error: "特性を選択" };
+  }
   const category = moveCategory(me.move);
   if (category === "Status") {
     return { moveEn: me.move, presets: [], error: "変化技（ダメージなし）" };
@@ -212,6 +236,7 @@ export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionRe
       points: me.points,
       mods: { plus: me.plusStat, minus: me.minusStat },
       item: me.item,
+      ability: me.ability,
       stages: me.stages,
     });
     return {
@@ -220,6 +245,7 @@ export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionRe
         const defender = championsPokemon(opp.species, {
           points,
           item: opp.item,
+          ability: opp.ability,
           stages: opp.stages,
         });
         return runOne(attacker, defender, me.move!, label);
@@ -234,6 +260,9 @@ export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionRe
 export function calcOpponentAttack(me: MySideConfig, opp: OpponentConfig): DirectionResult {
   if (!me.species || !opp.species || !opp.move) {
     return { moveEn: opp.move ?? "", presets: [], error: "入力待ち" };
+  }
+  if (!me.ability || !opp.ability) {
+    return { moveEn: opp.move, presets: [], error: "特性を選択" };
   }
   const category = moveCategory(opp.move);
   if (category === "Status") {
@@ -253,6 +282,7 @@ export function calcOpponentAttack(me: MySideConfig, opp: OpponentConfig): Direc
       points: me.points,
       mods: { plus: me.plusStat, minus: me.minusStat },
       item: me.item,
+      ability: me.ability,
       stages: me.stages,
     });
     return {
@@ -262,6 +292,7 @@ export function calcOpponentAttack(me: MySideConfig, opp: OpponentConfig): Direc
           points,
           mods,
           item: opp.item,
+          ability: opp.ability,
           stages: opp.stages,
         });
         return runOne(attacker, defender, opp.move!, label);

@@ -31,6 +31,7 @@ const tables = jaNames as {
   species: Record<string, string>;
   moves: Record<string, string>;
   items: Record<string, string>;
+  abilities: Record<string, string>;
 };
 
 let speciesEntries: NameEntry[] | null = null;
@@ -52,6 +53,10 @@ export function getItemEntries(allEn: string[]): NameEntry[] {
   return itemEntries;
 }
 
+export function getAbilityEntries(allEn: string[]): NameEntry[] {
+  return buildEntries(tables.abilities, allEn);
+}
+
 export function jaSpecies(en: string): string {
   return tables.species[en] ?? en;
 }
@@ -62,6 +67,10 @@ export function jaMove(en: string): string {
 
 export function jaItem(en: string): string {
   return tables.items[en] ?? en;
+}
+
+export function jaAbility(en: string): string {
+  return tables.abilities[en] ?? en;
 }
 
 /** 前方一致 > 部分一致 の順で最大limit件返す */

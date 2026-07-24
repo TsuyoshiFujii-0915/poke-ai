@@ -102,19 +102,33 @@ function speciesJa(enName, enToJa) {
   return null;
 }
 
-const [speciesRows, moveRows, itemRows] = await Promise.all([
+const [speciesRows, moveRows, itemRows, abilityRows] = await Promise.all([
   fetchCsv("pokemon_species_names.csv"),
   fetchCsv("move_names.csv"),
   fetchCsv("item_names.csv"),
+  fetchCsv("ability_names.csv"),
 ]);
 
 const speciesTable = buildNameTable(speciesRows);
 const moveTable = buildNameTable(moveRows);
 const itemTable = buildNameTable(itemRows);
+const abilityTable = buildNameTable(abilityRows);
+
+// PokeAPI does not yet contain the Champions ability names. Keep the official
+// Japanese in-game names explicit until the upstream CSV starts publishing them.
+const CHAMPIONS_ABILITY_NAMES = {
+  Dragonize: "ドラゴンスキン",
+  Eelevate: "うなぎのぼり",
+  Firemane: "ほのおのたてがみ",
+  "Fire Mane": "ほのおのたてがみ",
+  "Mega Sol": "メガソーラー",
+  "Piercing Drill": "かんつうドリル",
+  "Spicy Spray": "とびだすハバネロ",
+};
 
 const gen = Generations.get(9);
-const out = { species: {}, moves: {}, items: {} };
-const stats = { species: [0, 0], moves: [0, 0], items: [0, 0] };
+const out = { species: {}, moves: {}, items: {}, abilities: {} };
+const stats = { species: [0, 0], moves: [0, 0], items: [0, 0], abilities: [0, 0] };
 
 for (const s of gen.species) {
   const ja = speciesJa(s.name, speciesTable);
@@ -132,10 +146,17 @@ for (const i of gen.items) {
   stats.items[ja ? 0 : 1]++;
   if (ja) out.items[i.name] = ja;
 }
+for (const a of gen.abilities) {
+  const ja = abilityTable.get(a.name);
+  stats.abilities[ja ? 0 : 1]++;
+  if (ja) out.abilities[a.name] = ja;
+}
+Object.assign(out.abilities, CHAMPIONS_ABILITY_NAMES);
 
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(out));
 console.log(`species: ja付与 ${stats.species[0]} / 未付与 ${stats.species[1]}`);
 console.log(`moves:   ja付与 ${stats.moves[0]} / 未付与 ${stats.moves[1]}`);
 console.log(`items:   ja付与 ${stats.items[0]} / 未付与 ${stats.items[1]}`);
+console.log(`abilities: ja付与 ${stats.abilities[0]} / 未付与 ${stats.abilities[1]}`);
 console.log(`出力: ${OUT}`);

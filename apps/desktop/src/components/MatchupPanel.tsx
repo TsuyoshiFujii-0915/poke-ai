@@ -15,8 +15,18 @@ import {
   type NatureStatKey,
   type OpponentConfig,
 } from "../lib/calc";
-import { getArtworkId, getBaseSpeed, getLearnset, itemEntries, moveEntries, speciesEntries } from "../lib/dex";
-import { jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
+import {
+  abilityEntries,
+  getAbilityNames,
+  getArtworkId,
+  getBaseSpeed,
+  getLearnset,
+  itemEntries,
+  moveEntries,
+  speciesEntries,
+} from "../lib/dex";
+import { reconcileAbilitySelection } from "../lib/ability-selection";
+import { jaAbility, jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
 import { normalizePointInput } from "../lib/point-input";
 import {
   adjustStatStage,
@@ -43,6 +53,10 @@ function useMoveCandidates(species: string): NameEntry[] {
   }, [species]);
 }
 
+function useAbilityCandidates(species: string): NameEntry[] {
+  return useMemo(() => abilityEntries(species), [species]);
+}
+
 /** モンスターボールのラインアイコン（色は親のcurrentColorに従う） */
 function BallIcon() {
   return (
@@ -51,6 +65,17 @@ function BallIcon() {
       <path d="M2.5 12h6" stroke="currentColor" strokeWidth="2" />
       <path d="M15.5 12h6" stroke="currentColor" strokeWidth="2" />
       <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+/** 特性を表す、既存入力アイコンと同じ線幅の分岐シンボル */
+function AbilityIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+      <path d="M12 2.5 20 7v10l-8 4.5L4 17V7l8-4.5Z" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m10.3 11-3.1-1.8m6.5 1.8 3.1-1.8M12 14v3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -296,6 +321,7 @@ function DamageStageCounter({
 export function MatchupPanel() {
   const [me, setMe] = useState<MySideConfig>({
     species: "",
+    ability: "",
     item: "",
     move: "",
     points: { hp: 32, atk: 32, spe: 2 },
@@ -303,6 +329,7 @@ export function MatchupPanel() {
   });
   const [opp, setOpp] = useState<OpponentConfig>({
     species: "",
+    ability: "",
     item: "",
     move: "",
     stages: createNeutralStatStages(),
@@ -312,19 +339,29 @@ export function MatchupPanel() {
   useEffect(() => {
     setMe((current) => {
       if (current.species === detection.selection.player) return current;
-      return { ...current, species: detection.selection.player, move: "" };
+      const species = detection.selection.player;
+      const ability = species
+        ? reconcileAbilitySelection(current.ability, getAbilityNames(species))
+        : "";
+      return { ...current, species, ability, move: "" };
     });
   }, [detection.selection.player]);
 
   useEffect(() => {
     setOpp((current) => {
       if (current.species === detection.selection.opponent) return current;
-      return { ...current, species: detection.selection.opponent, move: "" };
+      const species = detection.selection.opponent;
+      const ability = species
+        ? reconcileAbilitySelection(current.ability, getAbilityNames(species))
+        : "";
+      return { ...current, species, ability, move: "" };
     });
   }, [detection.selection.opponent]);
 
   const myMoves = useMoveCandidates(me.species);
   const oppMoves = useMoveCandidates(opp.species);
+  const myAbilities = useAbilityCandidates(me.species);
+  const oppAbilities = useAbilityCandidates(opp.species);
   const myStageKeys = useMemo(() => damageStageKeysForMove(me.move ?? ""), [me.move]);
   const oppStageKeys = useMemo(() => damageStageKeysForMove(opp.move ?? ""), [opp.move]);
 
@@ -369,6 +406,16 @@ export function MatchupPanel() {
               placeholder="自分のポケモン"
               display={jaSpecies}
               disabled={false}
+            />
+          </IconRow>
+          <IconRow icon={<AbilityIcon />}>
+            <SearchSelect
+              entries={myAbilities}
+              value={me.ability}
+              onChange={(ability) => setMe({ ...me, ability })}
+              placeholder="特性"
+              display={jaAbility}
+              disabled={!me.species}
             />
           </IconRow>
           <IconRow icon="@">
@@ -467,6 +514,16 @@ export function MatchupPanel() {
               placeholder="相手のポケモン"
               display={jaSpecies}
               disabled={false}
+            />
+          </IconRow>
+          <IconRow icon={<AbilityIcon />}>
+            <SearchSelect
+              entries={oppAbilities}
+              value={opp.ability}
+              onChange={(ability) => setOpp({ ...opp, ability })}
+              placeholder="特性"
+              display={jaAbility}
+              disabled={!opp.species}
             />
           </IconRow>
           <IconRow icon="@">

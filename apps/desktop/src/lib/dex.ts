@@ -4,10 +4,17 @@
 // ビルド時に生成したJSON（scripts/build-champions-data.mjs）を使う。
 // gen9の素のデータはダメージ計算エンジン（@smogon/calc）にのみ使う。
 import { Generations } from "@smogon/calc";
-import { getItemEntries, getMoveEntries, getSpeciesEntries, type NameEntry } from "./names";
+import {
+  getAbilityEntries,
+  getItemEntries,
+  getMoveEntries,
+  getSpeciesEntries,
+  type NameEntry,
+} from "./names";
 import artworkIds from "../data/artwork-ids.json";
 import championsSpecies from "../data/champions-species.json";
 import championsItems from "../data/champions-items.json";
+import championsAbilities from "../data/champions-abilities.json";
 import championsMoves from "../data/champions-moves.json";
 import championsLearnsets from "../data/champions-learnsets.json";
 
@@ -27,6 +34,19 @@ export function moveEntries(): NameEntry[] {
 
 export function itemEntries(): NameEntry[] {
   return getItemEntries(championsItems as string[]);
+}
+
+/** Returns every ability selectable for the exact Champions species/form. */
+export function getAbilityNames(speciesEn: string): string[] {
+  const names = (championsAbilities as Record<string, string[]>)[speciesEn];
+  if (!names || names.length === 0) {
+    throw new Error(`no Champions ability data: ${speciesEn}`);
+  }
+  return names;
+}
+
+export function abilityEntries(speciesEn: string): NameEntry[] {
+  return speciesEn ? getAbilityEntries(getAbilityNames(speciesEn)) : [];
 }
 
 /**

@@ -9,6 +9,7 @@
 // 出力:
 //   src/data/champions-species.json    使用可能ポケモン（Showdown英語名の配列）
 //   src/data/champions-items.json      使用可能な持ち物（英語名の配列）
+//   src/data/champions-abilities.json  Species name → selectable ability names
 //   src/data/champions-moves.json      存在する技（英語名の配列）
 //   src/data/champions-learnsets.json  種ID → 習得技英語名の配列
 //   src/data/champions-move-patch.json ダメージ計算に影響する技のオーバーライド
@@ -73,6 +74,22 @@ for (const [id, data] of Object.entries(formatsData)) {
   species.push(calcSpecies.name);
 }
 species.sort();
+
+// --- Selectable abilities ---
+// The Champions mod inherits species ability slots from the current Showdown
+// Pokédex, including hidden abilities and the fixed abilities of Mega forms.
+const abilities = {};
+for (const speciesName of species) {
+  const speciesData = dex.species.get(speciesName);
+  if (!speciesData.exists) {
+    throw new Error(`ability source species not found: ${speciesName}`);
+  }
+  const names = [...new Set(Object.values(speciesData.abilities).filter(Boolean))];
+  if (names.length === 0) {
+    throw new Error(`no selectable abilities: ${speciesName}`);
+  }
+  abilities[speciesName] = names;
+}
 
 // --- 技（存在する技の全リスト）---
 // ベースのgen9標準技から、モッドで isNonstandard: "Past" の技を除き、
@@ -218,6 +235,7 @@ mkdirSync(OUT_DIR, { recursive: true });
 const write = (file, data) => writeFileSync(join(OUT_DIR, file), JSON.stringify(data));
 write("champions-species.json", species);
 write("champions-items.json", items);
+write("champions-abilities.json", abilities);
 write("champions-moves.json", moves);
 write("champions-learnsets.json", learnsets);
 const sortedPatch = Object.fromEntries(
