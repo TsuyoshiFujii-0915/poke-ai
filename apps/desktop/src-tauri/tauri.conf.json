@@ -26,6 +26,16 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/poke-capture"
+    ],
+    "resources": {
+      "../src/data/champions-species.json": "capture-data/champions-species.json",
+      "../src/data/ja-names.json": "capture-data/ja-names.json"
+    },
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
