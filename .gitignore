@@ -1,13 +1,25 @@
 .DS_Store
 
+# Local environment files
+.env
+.env.*
+!.env.example
+
 # Local tool settings and verification artifacts
 .claude/settings.local.json
 .verify-shots/
+/screenshot/
+
+# Editor settings
+.vscode/*
+!.vscode/extensions.json
+.idea/
 
 # JavaScript build artifacts
 **/node_modules/
 **/dist/
 **/dist-ssr/
+**/coverage/
 *.log
 *.local
 
