@@ -9,6 +9,7 @@
 .claude/settings.local.json
 .verify-shots/
 /screenshot/
+/docs/
 
 # Editor settings
 .vscode/*
