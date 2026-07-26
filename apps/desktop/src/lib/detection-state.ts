@@ -1,8 +1,8 @@
-export type DetectionMode = "auto" | "manual";
+export type DetectionStatus = "idle" | "detecting";
 export type DetectionSide = "player" | "opponent";
 
 export interface DetectionSelectionState {
-  mode: DetectionMode;
+  status: DetectionStatus;
   player: string;
   opponent: string;
 }
@@ -16,12 +16,13 @@ export interface DetectedPokemonPresence {
 
 export interface DetectionServerSnapshot {
   type: "detection_state";
-  mode: DetectionMode;
+  status: DetectionStatus;
   player: DetectedPokemonPresence | null;
   opponent: DetectedPokemonPresence | null;
+  failedSides: DetectionSide[];
 }
 
-export interface AutomaticPokemonEvent {
+export interface PokemonDetectionEvent {
   type: "pokemon_detected" | "pokemon_switched_in";
   timestamp: string;
   side: DetectionSide;
@@ -31,36 +32,33 @@ export interface AutomaticPokemonEvent {
   source: "ocr";
 }
 
-export type DetectionServerMessage = DetectionServerSnapshot | AutomaticPokemonEvent;
+export type DetectionServerMessage = DetectionServerSnapshot | PokemonDetectionEvent;
 
 export function createDetectionSelectionState(
-  mode: DetectionMode,
+  status: DetectionStatus,
   player: string,
   opponent: string,
 ): DetectionSelectionState {
-  return { mode, player, opponent };
+  return { status, player, opponent };
 }
 
 export function applyServerSnapshot(
   state: DetectionSelectionState,
   snapshot: DetectionServerSnapshot,
 ): DetectionSelectionState {
-  if (snapshot.mode === "manual") {
-    return { ...state, mode: "manual" };
-  }
   return {
-    mode: "auto",
+    status: snapshot.status,
     player: snapshot.player?.pokemon ?? state.player,
     opponent: snapshot.opponent?.pokemon ?? state.opponent,
   };
 }
 
-export function applyAutomaticDetection(
+export function applyDetectionResult(
   state: DetectionSelectionState,
   side: DetectionSide,
   pokemon: string,
 ): DetectionSelectionState {
-  if (state.mode === "manual") {
+  if (state.status === "idle") {
     return state;
   }
   return { ...state, [side]: pokemon };
@@ -83,36 +81,40 @@ export function parseDetectionServerMessage(raw: string): DetectionServerMessage
     return parseSnapshot(value);
   }
   if (value.type === "pokemon_detected" || value.type === "pokemon_switched_in") {
-    return parseAutomaticEvent(value);
+    return parseDetectionEvent(value);
   }
   throw new Error(`unsupported detection server message type: ${value.type}`);
 }
 
 function parseSnapshot(value: Record<string, unknown>): DetectionServerSnapshot {
-  if (value.mode !== "auto" && value.mode !== "manual") {
-    throw new Error("detection state contains an invalid mode");
+  if (value.status !== "idle" && value.status !== "detecting") {
+    throw new Error("detection state contains an invalid status");
+  }
+  if (!Array.isArray(value.failedSides) || !value.failedSides.every(isDetectionSide)) {
+    throw new Error("detection state contains invalid failed sides");
   }
   return {
     type: "detection_state",
-    mode: value.mode,
+    status: value.status,
     player: parsePresence(value.player, "player"),
     opponent: parsePresence(value.opponent, "opponent"),
+    failedSides: value.failedSides,
   };
 }
 
-function parseAutomaticEvent(value: Record<string, unknown>): AutomaticPokemonEvent {
+function parseDetectionEvent(value: Record<string, unknown>): PokemonDetectionEvent {
   if (
-    (value.side !== "player" && value.side !== "opponent") ||
+    !isDetectionSide(value.side) ||
     typeof value.timestamp !== "string" ||
     typeof value.pokemon !== "string" ||
     typeof value.displayName !== "string" ||
     typeof value.confidence !== "number" ||
     value.source !== "ocr"
   ) {
-    throw new Error("automatic detection event has an invalid shape");
+    throw new Error("detection event has an invalid shape");
   }
   return {
-    type: value.type as AutomaticPokemonEvent["type"],
+    type: value.type as PokemonDetectionEvent["type"],
     timestamp: value.timestamp,
     side: value.side,
     pokemon: value.pokemon,
@@ -144,6 +146,10 @@ function parsePresence(
     displayName: value.displayName,
     confidence: value.confidence,
   };
+}
+
+function isDetectionSide(value: unknown): value is DetectionSide {
+  return value === "player" || value === "opponent";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,58 +1,71 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  applyAutomaticDetection,
+  applyDetectionResult,
   applyServerSnapshot,
   applyUserSelection,
   createDetectionSelectionState,
   type DetectionServerSnapshot,
 } from "../src/lib/detection-state.ts";
 
-test("manual mode accepts typed selections and blocks automatic replacements", () => {
-  const manual = createDetectionSelectionState("manual", "Meowscarada", "Garchomp");
-  const selected = applyUserSelection(manual, "opponent", "Lucario-Mega");
-  const afterAutomaticEvent = applyAutomaticDetection(selected, "opponent", "Dragonite");
+test("idle detection preserves a manually corrected Mega form", () => {
+  const idle = createDetectionSelectionState("idle", "Raichu-Mega-X", "Garchomp");
+  const delayedResult = applyDetectionResult(idle, "player", "Raichu");
 
-  assert.equal(selected.opponent, "Lucario-Mega");
-  assert.deepEqual(afterAutomaticEvent, selected);
+  assert.deepEqual(delayedResult, idle);
 });
 
-test("automatic mode accepts both recognized names and user selections", () => {
-  const automatic = createDetectionSelectionState("auto", "", "");
-
-  const recognized = applyAutomaticDetection(automatic, "player", "Meowscarada");
-  const corrected = applyUserSelection(recognized, "player", "Lucario");
-
-  assert.equal(recognized.player, "Meowscarada");
-  assert.equal(corrected.player, "Lucario");
-});
-
-test("a manual server snapshot preserves current names", () => {
-  const current = createDetectionSelectionState("auto", "Meowscarada", "Garchomp");
-  const snapshot: DetectionServerSnapshot = {
-    type: "detection_state",
-    mode: "manual",
-    player: null,
-    opponent: null,
-  };
+test("an active detection run accepts OCR results", () => {
+  const detecting = createDetectionSelectionState("detecting", "Raichu-Mega-X", "Garchomp");
 
   assert.deepEqual(
-    applyServerSnapshot(current, snapshot),
-    createDetectionSelectionState("manual", "Meowscarada", "Garchomp"),
+    applyDetectionResult(detecting, "player", "Raichu"),
+    createDetectionSelectionState("detecting", "Raichu", "Garchomp"),
   );
 });
 
-test("a fresh automatic snapshot preserves names until detection finishes", () => {
-  const current = createDetectionSelectionState("manual", "Lucario-Mega", "Garchomp-Mega");
+test("starting a detection run preserves current names until results arrive", () => {
+  const current = createDetectionSelectionState("idle", "Raichu-Mega-X", "Garchomp-Mega");
   const snapshot: DetectionServerSnapshot = {
     type: "detection_state",
-    mode: "auto",
+    status: "detecting",
     player: null,
     opponent: null,
+    failedSides: [],
   };
 
   assert.deepEqual(
     applyServerSnapshot(current, snapshot),
-    createDetectionSelectionState("auto", "Lucario-Mega", "Garchomp-Mega"),
+    createDetectionSelectionState("detecting", "Raichu-Mega-X", "Garchomp-Mega"),
+  );
+});
+
+test("a completed partial run applies successes and preserves failed sides", () => {
+  const current = createDetectionSelectionState("detecting", "Raichu-Mega-X", "Garchomp-Mega");
+  const snapshot: DetectionServerSnapshot = {
+    type: "detection_state",
+    status: "idle",
+    player: {
+      side: "player",
+      pokemon: "Raichu",
+      displayName: "ライチュウ",
+      confidence: 0.9,
+    },
+    opponent: null,
+    failedSides: ["opponent"],
+  };
+
+  assert.deepEqual(
+    applyServerSnapshot(current, snapshot),
+    createDetectionSelectionState("idle", "Raichu", "Garchomp-Mega"),
+  );
+});
+
+test("name inputs remain editable while no detection is running", () => {
+  const idle = createDetectionSelectionState("idle", "Raichu", "Garchomp");
+
+  assert.deepEqual(
+    applyUserSelection(idle, "player", "Raichu-Mega-X"),
+    createDetectionSelectionState("idle", "Raichu-Mega-X", "Garchomp"),
   );
 });

@@ -370,20 +370,23 @@ export function MatchupPanel() {
 
   return (
     <div className="matchup-panel">
-      <div className="detection-mode-control" aria-label="ポケモン名の検出モード">
-        <span className="detection-mode-label">AUTO</span>
+      <div className="detection-control" aria-label="画面からポケモン名を検出">
         <button
           type="button"
-          role="switch"
-          aria-checked={detection.selection.mode === "auto"}
-          aria-label="画面からポケモン名を自動検出"
-          className={`detection-auto-switch ${detection.selection.mode === "auto" ? "active" : ""}`}
-          disabled={detection.changingMode || !detection.synchronized}
-          title={detection.selection.mode === "auto" ? "自動検出中" : "自動検出停止中"}
-          onClick={() => void detection.changeMode(
-            detection.selection.mode === "auto" ? "manual" : "auto",
-          )}
-        />
+          aria-busy={detection.selection.status === "detecting"}
+          aria-label="現在の対戦画面から両方のポケモン名を検出"
+          className={`detection-trigger-button ${detection.selection.status === "detecting" ? "detecting" : ""}`}
+          disabled={
+            detection.requestingDetection ||
+            detection.selection.status === "detecting" ||
+            !detection.synchronized
+          }
+          title={detection.selection.status === "detecting" ? "検出中" : "ポケモン名を検出"}
+          onClick={() => void detection.detect()}
+        >
+          <span className="detection-trigger-indicator" aria-hidden="true" />
+          検出
+        </button>
         {detection.error && (
           <span
             className="detection-error"

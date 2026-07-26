@@ -2,8 +2,9 @@ import CaptureRecognition
 import Foundation
 import Network
 
-protocol PokemonDetectionModeControlling: AnyObject {
-    func changeMode(to mode: PokemonDetectionMode) throws -> Void
+protocol PokemonDetectionControlling: AnyObject {
+    func startDetection() throws -> Void
+    func stopDetection() throws -> Void
 }
 
 enum DetectionControlServerError: Error, CustomStringConvertible {
@@ -73,21 +74,23 @@ private struct HTTPRequestHead {
 
 private struct DetectionStateEvent: Encodable {
     let type: String
-    let mode: PokemonDetectionMode
+    let status: PokemonDetectionStatus
     let player: DetectedPokemonPresence?
     let opponent: DetectedPokemonPresence?
+    let failedSides: [BattleSide]
 
     private enum CodingKeys: String, CodingKey {
         case type
-        case mode
+        case status
         case player
         case opponent
+        case failedSides
     }
 
     func encode(to encoder: Encoder) throws -> Void {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(type, forKey: .type)
-        try container.encode(mode, forKey: .mode)
+        try container.encode(status, forKey: .status)
         if let player {
             try container.encode(player, forKey: .player)
         } else {
@@ -98,6 +101,7 @@ private struct DetectionStateEvent: Encodable {
         } else {
             try container.encodeNil(forKey: .opponent)
         }
+        try container.encode(failedSides, forKey: .failedSides)
     }
 }
 
@@ -109,7 +113,19 @@ private struct RecognitionPresenceEvent: Decodable {
     let confidence: Float
 }
 
+private struct RecognitionFailureEvent: Decodable {
+    let type: String
+    let side: BattleSide
+}
+
+private enum RecognitionEventUpdate {
+    case ignored
+    case presenceAccepted(PokemonDetectionResolution)
+    case failureAccepted(PokemonDetectionResolution)
+}
+
 final class DetectionControlServer {
+    private static let detectionTimeoutSeconds: TimeInterval = 12
     private static let allowedOrigins: Set<String> = [
         "http://localhost:1420",
         "http://127.0.0.1:1420",
@@ -118,13 +134,14 @@ final class DetectionControlServer {
     ]
 
     private let listener: NWListener
-    private let modeController: PokemonDetectionModeControlling
+    private let detectionController: PokemonDetectionControlling
     private let queue = DispatchQueue(label: "detection.control.server")
     private let encoder = JSONEncoder()
-    private var state = PokemonDetectionControlState(mode: .automatic)
+    private var state = PokemonDetectionControlState()
+    private var detectionTimeoutWorkItem: DispatchWorkItem?
     private var eventConnections: [NWConnection] = []
 
-    init(port: UInt16, modeController: PokemonDetectionModeControlling) throws {
+    init(port: UInt16, detectionController: PokemonDetectionControlling) throws {
         guard let networkPort = NWEndpoint.Port(rawValue: port) else {
             throw DetectionControlServerError.invalidPort(port)
         }
@@ -134,7 +151,7 @@ final class DetectionControlServer {
             port: networkPort
         )
         self.listener = try NWListener(using: parameters)
-        self.modeController = modeController
+        self.detectionController = detectionController
         listener.newConnectionHandler = { [weak self] connection in
             self?.accept(connection)
         }
@@ -147,8 +164,18 @@ final class DetectionControlServer {
     func publishRecognitionEvent(json: String) -> Void {
         queue.async { [self] in
             do {
-                if try updateStateIfPresenceEvent(json: json) {
+                switch try updateState(json: json) {
+                case .ignored:
+                    return
+                case let .presenceAccepted(resolution):
                     broadcastEvent(json: json)
+                    try finishDetectionIfCompleted(resolution: resolution)
+                case let .failureAccepted(resolution):
+                    if resolution == .completed {
+                        try finishDetectionIfCompleted(resolution: resolution)
+                    } else {
+                        broadcastEvent(json: try stateJSON())
+                    }
                 }
             } catch {
                 log("エラー: 認識イベントの配信に失敗: \(error)")
@@ -209,11 +236,8 @@ final class DetectionControlServer {
             sendJSON(connection: connection, json: try stateJSON(), origin: origin)
         case ("GET", "/events"):
             openEventStream(connection: connection, origin: origin)
-        case ("POST", "/mode/auto"):
-            try changeMode(to: .automatic)
-            sendJSON(connection: connection, json: try stateJSON(), origin: origin)
-        case ("POST", "/mode/manual"):
-            try changeMode(to: .manual)
+        case ("POST", "/detect"):
+            try startDetection()
             sendJSON(connection: connection, json: try stateJSON(), origin: origin)
         default:
             sendError(connection: connection, status: "404 Not Found", detail: "route not found")
@@ -244,17 +268,45 @@ final class DetectionControlServer {
         )
     }
 
-    private func changeMode(to mode: PokemonDetectionMode) throws -> Void {
-        guard mode != state.mode else {
-            return
-        }
-        try modeController.changeMode(to: mode)
-        _ = state.changeMode(to: mode)
+    private func startDetection() throws -> Void {
+        try detectionController.startDetection()
+        try state.startDetection()
+        scheduleDetectionTimeout()
         broadcastEvent(json: try stateJSON())
-        log("ポケモン名検出モード: \(mode.rawValue)")
+        log("ポケモン名の手動検出を開始")
     }
 
-    private func updateStateIfPresenceEvent(json: String) throws -> Bool {
+    private func scheduleDetectionTimeout() -> Void {
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.finishTimedOutDetection()
+        }
+        detectionTimeoutWorkItem = workItem
+        queue.asyncAfter(
+            deadline: .now() + Self.detectionTimeoutSeconds,
+            execute: workItem
+        )
+    }
+
+    private func finishTimedOutDetection() -> Void {
+        guard state.status == .detecting else {
+            return
+        }
+        do {
+            try state.timeoutDetection()
+            try detectionController.stopDetection()
+            detectionTimeoutWorkItem = nil
+            broadcastEvent(json: try stateJSON())
+            log("ポケモン名の手動検出をタイムアウトで終了")
+        } catch {
+            log("エラー: ポケモン名検出のタイムアウト処理に失敗: \(error)")
+            exit(1)
+        }
+    }
+
+    private func updateState(json: String) throws -> RecognitionEventUpdate {
+        guard state.status == .detecting else {
+            return .ignored
+        }
         guard let data = json.data(using: .utf8) else {
             throw DetectionControlServerError.invalidRecognitionEvent("event is not UTF-8")
         }
@@ -262,25 +314,50 @@ final class DetectionControlServer {
               let type = object["type"] as? String else {
             throw DetectionControlServerError.invalidRecognitionEvent("event type is missing")
         }
+        if type == "pokemon_detection_failed" {
+            let event = try JSONDecoder().decode(RecognitionFailureEvent.self, from: data)
+            let resolution = try state.recordFailure(side: event.side)
+            guard resolution != .alreadyResolved else {
+                return .ignored
+            }
+            return .failureAccepted(resolution)
+        }
         guard type == "pokemon_detected" || type == "pokemon_switched_in" else {
-            return false
+            return .ignored
         }
         let event = try JSONDecoder().decode(RecognitionPresenceEvent.self, from: data)
-        try state.recordAutomaticPresence(DetectedPokemonPresence(
+        let resolution = try state.recordPresence(DetectedPokemonPresence(
             side: event.side,
             pokemon: event.pokemon,
             displayName: event.displayName,
             confidence: event.confidence
         ))
-        return true
+        guard resolution != .alreadyResolved else {
+            return .ignored
+        }
+        return .presenceAccepted(resolution)
+    }
+
+    private func finishDetectionIfCompleted(
+        resolution: PokemonDetectionResolution
+    ) throws -> Void {
+        guard resolution == .completed else {
+            return
+        }
+        detectionTimeoutWorkItem?.cancel()
+        detectionTimeoutWorkItem = nil
+        try detectionController.stopDetection()
+        broadcastEvent(json: try stateJSON())
+        log("ポケモン名の手動検出を終了")
     }
 
     private func stateJSON() throws -> String {
         let event = DetectionStateEvent(
             type: "detection_state",
-            mode: state.mode,
+            status: state.status,
             player: state.player,
-            opponent: state.opponent
+            opponent: state.opponent,
+            failedSides: state.failedSides
         )
         let data = try encoder.encode(event)
         guard let json = String(data: data, encoding: .utf8) else {

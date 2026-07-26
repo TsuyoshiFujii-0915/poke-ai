@@ -515,7 +515,7 @@ final class LivePokemonNameDetector {
     }
 }
 
-final class ModeControlledPokemonNameObserver: CapturedFrameObserver, PokemonDetectionModeControlling {
+final class UserTriggeredPokemonNameObserver: CapturedFrameObserver, PokemonDetectionControlling {
     private let candidates: [PokemonNameCandidate]
     private let captureQueue: DispatchQueue
     private let eventPublisher: (String) -> Void
@@ -525,15 +525,11 @@ final class ModeControlledPokemonNameObserver: CapturedFrameObserver, PokemonDet
         candidates: [PokemonNameCandidate],
         captureQueue: DispatchQueue,
         eventPublisher: @escaping (String) -> Void
-    ) throws {
+    ) {
         self.candidates = candidates
         self.captureQueue = captureQueue
         self.eventPublisher = eventPublisher
-        self.detector = try LivePokemonNameDetector(
-            candidates: candidates,
-            stateQueue: captureQueue,
-            eventPublisher: eventPublisher
-        )
+        self.detector = nil
     }
 
     func receive(pixelBuffer: CVPixelBuffer, sampleBuffer: CMSampleBuffer) -> Void {
@@ -554,22 +550,23 @@ final class ModeControlledPokemonNameObserver: CapturedFrameObserver, PokemonDet
         }
     }
 
-    func changeMode(to mode: PokemonDetectionMode) throws -> Void {
+    func startDetection() throws -> Void {
         try captureQueue.sync {
-            switch mode {
-            case .automatic:
-                guard detector == nil else {
-                    return
-                }
-                detector = try LivePokemonNameDetector(
-                    candidates: candidates,
-                    stateQueue: captureQueue,
-                    eventPublisher: eventPublisher
-                )
-            case .manual:
-                detector?.deactivate()
-                detector = nil
+            guard detector == nil else {
+                throw PokemonDetectionControlError.detectionAlreadyRunning
             }
+            detector = try LivePokemonNameDetector(
+                candidates: candidates,
+                stateQueue: captureQueue,
+                eventPublisher: eventPublisher
+            )
+        }
+    }
+
+    func stopDetection() throws -> Void {
+        captureQueue.sync {
+            detector?.deactivate()
+            detector = nil
         }
     }
 }

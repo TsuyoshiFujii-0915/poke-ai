@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  applyAutomaticDetection,
+  applyDetectionResult,
   applyServerSnapshot,
   applyUserSelection,
   createDetectionSelectionState,
   parseDetectionServerMessage,
-  type DetectionMode,
   type DetectionSelectionState,
+  type DetectionServerSnapshot,
   type DetectionSide,
 } from "./detection-state";
 
@@ -15,18 +15,18 @@ const DETECTION_CONTROL_URL = "http://127.0.0.1:8788";
 export interface PokemonDetectionControl {
   selection: DetectionSelectionState;
   synchronized: boolean;
-  changingMode: boolean;
+  requestingDetection: boolean;
   error: string | null;
-  changeMode: (mode: DetectionMode) => Promise<void>;
+  detect: () => Promise<void>;
   selectPokemon: (side: DetectionSide, pokemon: string) => void;
 }
 
 export function usePokemonDetection(): PokemonDetectionControl {
   const [selection, setSelection] = useState<DetectionSelectionState>(() =>
-    createDetectionSelectionState("auto", "", ""),
+    createDetectionSelectionState("idle", "", ""),
   );
   const [synchronized, setSynchronized] = useState(false);
-  const [changingMode, setChangingMode] = useState(false);
+  const [requestingDetection, setRequestingDetection] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,13 +36,13 @@ export function usePokemonDetection(): PokemonDetectionControl {
         const event = parseDetectionServerMessage(message.data);
         if (event.type === "detection_state") {
           setSelection((current) => applyServerSnapshot(current, event));
+          setError(detectionFailureMessage(event));
         } else {
           setSelection((current) =>
-            applyAutomaticDetection(current, event.side, event.pokemon),
+            applyDetectionResult(current, event.side, event.pokemon),
           );
         }
         setSynchronized(true);
-        setError(null);
       } catch (cause) {
         setSynchronized(false);
         setError(describeError("検出状態の受信に失敗しました", cause));
@@ -58,10 +58,10 @@ export function usePokemonDetection(): PokemonDetectionControl {
     };
   }, []);
 
-  const changeMode = useCallback(async (mode: DetectionMode): Promise<void> => {
-    setChangingMode(true);
+  const detect = useCallback(async (): Promise<void> => {
+    setRequestingDetection(true);
     try {
-      const response = await fetch(`${DETECTION_CONTROL_URL}/mode/${mode}`, {
+      const response = await fetch(`${DETECTION_CONTROL_URL}/detect`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -70,16 +70,15 @@ export function usePokemonDetection(): PokemonDetectionControl {
       }
       const snapshot = parseDetectionServerMessage(await response.text());
       if (snapshot.type !== "detection_state") {
-        throw new Error("mode change response is not a detection state");
+        throw new Error("detection response is not a detection state");
       }
       setSelection((current) => applyServerSnapshot(current, snapshot));
       setSynchronized(true);
-      setError(null);
+      setError(detectionFailureMessage(snapshot));
     } catch (cause) {
-      setSynchronized(false);
-      setError(describeError("検出モードを変更できませんでした", cause));
+      setError(describeError("ポケモン名を検出できませんでした", cause));
     } finally {
-      setChangingMode(false);
+      setRequestingDetection(false);
     }
   }, []);
 
@@ -93,11 +92,21 @@ export function usePokemonDetection(): PokemonDetectionControl {
   return {
     selection,
     synchronized,
-    changingMode,
+    requestingDetection,
     error,
-    changeMode,
+    detect,
     selectPokemon,
   };
+}
+
+function detectionFailureMessage(snapshot: DetectionServerSnapshot): string | null {
+  if (snapshot.failedSides.length === 0) {
+    return null;
+  }
+  const labels = snapshot.failedSides.map((side) =>
+    side === "player" ? "自分側" : "相手側",
+  );
+  return `${labels.join("・")}の名前を検出できませんでした`;
 }
 
 function describeError(message: string, cause: unknown): string {

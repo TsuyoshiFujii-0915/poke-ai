@@ -765,14 +765,14 @@ case "recognize-stream":
         )
         let captureQueue = DispatchQueue(label: "capture.frames")
         let eventRelay = RecognitionEventRelay()
-        let detector = try ModeControlledPokemonNameObserver(
+        let detector = UserTriggeredPokemonNameObserver(
             candidates: candidates,
             captureQueue: captureQueue,
             eventPublisher: eventRelay.publish
         )
         let controlServer = try DetectionControlServer(
             port: 8_788,
-            modeController: detector
+            detectionController: detector
         )
         try eventRelay.install(handler: controlServer.publishRecognitionEvent)
         controlServer.start()
