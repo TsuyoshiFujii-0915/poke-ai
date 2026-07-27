@@ -35,6 +35,10 @@ import {
 } from "../lib/stat-stage";
 import type { DamageStageKey } from "../lib/damage-stage";
 import { usePokemonDetection } from "../lib/use-pokemon-detection";
+import {
+  getMegaEvolutionState,
+  isSameMegaEvolutionFamily,
+} from "../lib/mega-evolution";
 import { HpBars } from "./HpBars";
 import { SearchSelect } from "./SearchSelect";
 
@@ -57,8 +61,11 @@ function useAbilityCandidates(species: string): NameEntry[] {
   return useMemo(() => abilityEntries(species), [species]);
 }
 
+const SELECTABLE_SPECIES = speciesEntries();
+const SELECTABLE_SPECIES_NAMES = SELECTABLE_SPECIES.map((entry) => entry.en);
+
 /** モンスターボールのラインアイコン（色は親のcurrentColorに従う） */
-function BallIcon() {
+function BallIcon(): ReactNode {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="2" />
@@ -66,6 +73,89 @@ function BallIcon() {
       <path d="M15.5 12h6" stroke="currentColor" strokeWidth="2" />
       <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
     </svg>
+  );
+}
+
+function MegaEvolutionIcon(): ReactNode {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+      <path
+        d="M5.2 4.7c3.1 1.3 5.4 3.8 6.8 7.3 1.4-3.5 3.7-6 6.8-7.3-1.3 3.1-1.1 6 .7 8.7-2.9.1-5.4 1.8-7.5 5.2-2.1-3.4-4.6-5.1-7.5-5.2 1.8-2.7 2-5.6.7-8.7Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="1.65" fill="currentColor" />
+    </svg>
+  );
+}
+
+function MegaEvolutionControl({
+  species,
+  catalog,
+  onChange,
+}: {
+  species: string;
+  catalog: readonly string[];
+  onChange: (species: string) => void;
+}): ReactNode {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const mega = getMegaEvolutionState(species, catalog);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [species]);
+
+  if (mega === null) {
+    return <BallIcon />;
+  }
+  const active = mega.activeVariant !== null;
+  const activeSuffix = mega.activeVariant === null
+    ? ""
+    : mega.activeVariant.slice(`${mega.baseSpecies}-Mega`.length).replace(/^-/, "");
+  const toggle = (): void => {
+    if (mega.activeVariant !== null) {
+      onChange(mega.baseSpecies);
+      return;
+    }
+    if (mega.variants.length === 1) {
+      onChange(mega.variants[0]);
+      return;
+    }
+    setMenuOpen((current) => !current);
+  };
+
+  return (
+    <div
+      className="mega-evolution-control"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setMenuOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className={`mega-evolution-button ${active ? "active" : ""}`}
+        aria-label={active ? "メガシンカを解除" : "メガシンカ"}
+        aria-pressed={active}
+        aria-expanded={mega.variants.length > 1 ? menuOpen : undefined}
+        title={active ? "メガシンカ中（クリックで解除）" : "メガシンカ"}
+        onClick={toggle}
+      >
+        <MegaEvolutionIcon />
+        {activeSuffix && <span className="mega-form-badge">{activeSuffix}</span>}
+      </button>
+      {menuOpen && (
+        <div className="mega-form-menu" aria-label="メガシンカ先を選択">
+          {mega.variants.map((variant) => (
+            <button key={variant} type="button" onClick={() => onChange(variant)}>
+              {jaSpecies(variant)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -343,7 +433,12 @@ export function MatchupPanel() {
       const ability = species
         ? reconcileAbilitySelection(current.ability, getAbilityNames(species))
         : "";
-      return { ...current, species, ability, move: "" };
+      const move = isSameMegaEvolutionFamily(
+        current.species,
+        species,
+        SELECTABLE_SPECIES_NAMES,
+      ) ? current.move : "";
+      return { ...current, species, ability, move };
     });
   }, [detection.selection.player]);
 
@@ -354,7 +449,12 @@ export function MatchupPanel() {
       const ability = species
         ? reconcileAbilitySelection(current.ability, getAbilityNames(species))
         : "";
-      return { ...current, species, ability, move: "" };
+      const move = isSameMegaEvolutionFamily(
+        current.species,
+        species,
+        SELECTABLE_SPECIES_NAMES,
+      ) ? current.move : "";
+      return { ...current, species, ability, move };
     });
   }, [detection.selection.opponent]);
 
@@ -401,9 +501,15 @@ export function MatchupPanel() {
           ポケモン名・持ち物を上、公式絵を中、能力ポイントを下に置く */}
       <div className="side-col mine">
         <div className="side-fields">
-          <IconRow icon={<BallIcon />}>
+          <IconRow icon={(
+            <MegaEvolutionControl
+              species={me.species}
+              catalog={SELECTABLE_SPECIES_NAMES}
+              onChange={(species) => detection.selectPokemon("player", species)}
+            />
+          )}>
             <SearchSelect
-              entries={speciesEntries()}
+              entries={SELECTABLE_SPECIES}
               value={me.species}
               onChange={(species) => detection.selectPokemon("player", species)}
               placeholder="自分のポケモン"
@@ -509,9 +615,15 @@ export function MatchupPanel() {
         <PokemonArt species={opp.species} side="opp" />
         <SpeedTiersLine species={opp.species} />
         <div className="side-fields">
-          <IconRow icon={<BallIcon />}>
+          <IconRow icon={(
+            <MegaEvolutionControl
+              species={opp.species}
+              catalog={SELECTABLE_SPECIES_NAMES}
+              onChange={(species) => detection.selectPokemon("opponent", species)}
+            />
+          )}>
             <SearchSelect
-              entries={speciesEntries()}
+              entries={SELECTABLE_SPECIES}
               value={opp.species}
               onChange={(species) => detection.selectPokemon("opponent", species)}
               placeholder="相手のポケモン"
