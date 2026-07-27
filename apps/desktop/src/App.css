@@ -806,6 +806,15 @@ body {
   font-size: 11px;
 }
 
+/* Keep both damage groups equally spaced from their nearest stage controls. */
+.attack-row.mine .hp-bars {
+  transform: translateY(4px);
+}
+
+.attack-row.opp .hp-bars {
+  transform: translateY(-4px);
+}
+
 .hp-bar-row {
   display: grid;
   grid-template-columns: 64px minmax(120px, 1fr) 94px 74px;
