@@ -33,6 +33,7 @@ import {
   createNeutralStatStages,
   type StatStages,
 } from "../lib/stat-stage";
+import { createInitialMySideConfig } from "../lib/initial-config";
 import type { DamageStageKey } from "../lib/damage-stage";
 import { usePokemonDetection } from "../lib/use-pokemon-detection";
 import {
@@ -396,6 +397,7 @@ function DamageStageCounter({
       aria-label={`${roleName}の${DAMAGE_STAGE_NAMES[stageKey]}ランク`}
     >
       <span className="damage-stage-label">{DAMAGE_STAGE_LABELS[stageKey]}</span>
+      <span className="damage-stage-label-gap" aria-hidden="true" />
       <button
         type="button"
         className="damage-stage-button"
@@ -422,14 +424,7 @@ function DamageStageCounter({
 }
 
 export function MatchupPanel() {
-  const [me, setMe] = useState<MySideConfig>({
-    species: "",
-    ability: "",
-    item: "",
-    move: "",
-    points: { hp: 32, atk: 32, spe: 2 },
-    stages: createNeutralStatStages(),
-  });
+  const [me, setMe] = useState<MySideConfig>(createInitialMySideConfig);
   const [opp, setOpp] = useState<OpponentConfig>({
     species: "",
     ability: "",

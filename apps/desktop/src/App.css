@@ -885,12 +885,12 @@ body {
   --stage-accent: var(--muted);
   flex: none;
   box-sizing: border-box;
-  width: 66px;
+  width: 70px;
   height: 19px;
   display: grid;
-  grid-template-columns: 10px 15px 22px 9px;
+  grid-template-columns: 9px 7px 11px 20px 11px;
   place-items: center;
-  padding: 0 4px;
+  padding: 0 5px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(10, 12, 20, 0.62);
@@ -920,8 +920,13 @@ body {
   font-weight: 800;
 }
 
+.damage-stage-label-gap {
+  width: 7px;
+  height: 1px;
+}
+
 .damage-stage-button {
-  width: 9px;
+  width: 11px;
   height: 17px;
   padding: 0;
   border: 0;
