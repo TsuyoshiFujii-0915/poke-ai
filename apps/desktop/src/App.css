@@ -794,15 +794,16 @@ body {
 .hp-bars {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 6px;
   flex: 1;
   min-width: 0;
+  min-height: 63px;
 }
 
 .hp-bars.muted {
   color: var(--muted);
   font-size: 11px;
-  padding: 6px 0;
 }
 
 .hp-bar-row {
