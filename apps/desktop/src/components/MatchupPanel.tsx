@@ -78,14 +78,25 @@ function BallIcon(): ReactNode {
 
 function MegaEvolutionIcon(): ReactNode {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="17" height="18" aria-hidden="true">
+      <defs>
+        <linearGradient id="mega-evolution-gradient" x1="7" y1="3" x2="17" y2="21" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#ffd75a" />
+          <stop offset="0.28" stopColor="#78dd72" />
+          <stop offset="0.55" stopColor="#58c9ef" />
+          <stop offset="0.78" stopColor="#9b83ed" />
+          <stop offset="1" stopColor="#ff72b4" />
+        </linearGradient>
+      </defs>
       <path
-        d="M5.2 4.7c3.1 1.3 5.4 3.8 6.8 7.3 1.4-3.5 3.7-6 6.8-7.3-1.3 3.1-1.1 6 .7 8.7-2.9.1-5.4 1.8-7.5 5.2-2.1-3.4-4.6-5.1-7.5-5.2 1.8-2.7 2-5.6.7-8.7Z"
+        d="M14.2 1.8c-1.7 2.4-1.7 3.9.1 4.8 1.1.5 2.7.8 4.1 1.4 2.5 1 3.6 2.7 3 5.2-.8 3.3-4.4 7-10.4 10.2 2.2-2.8 2.7-4.8-.6-6.5-4.8-2.4-7.6-4.3-7.3-7 .3-2.9 4-5.4 12-7.7Zm-3 3.6 2.3-.8.7 1.8-3.8.5.8-1.5Zm-4 3.1c3.8-.9 7.4-1.2 9.6-1l1.7 1.1c-4 .1-8.2.6-12.5 1.6-.1-.8.3-1.4 1.2-1.7Zm-.7 3.1c4.8-.9 9.8-1.7 12.4-1.2.8.2 1.2.8 1.2 1.6-4.8.3-9.2.9-12.9 1.6l-.7-2Zm7.8 4c1.5-.6 3-.8 4.4-.7-.2 1.5-1.4 2.8-3.8 4-.1-1.4-.2-2.4-.6-3.3Z"
+        fill="url(#mega-evolution-gradient)"
+        fillRule="evenodd"
+        clipRule="evenodd"
         stroke="currentColor"
-        strokeWidth="1.7"
+        strokeWidth="0.55"
         strokeLinejoin="round"
       />
-      <circle cx="12" cy="12" r="1.65" fill="currentColor" />
     </svg>
   );
 }
@@ -211,7 +222,9 @@ function PokemonArt({ species, side }: { species: string; side: "mine" | "opp" }
 /** Renders the opponent's uninvested, neutral-max, and positive-max Speed tiers. */
 function SpeedTiersLine({ species }: { species: string }) {
   const baseSpeed = species ? getBaseSpeed(species) : null;
-  if (baseSpeed === null) return null;
+  if (baseSpeed === null) {
+    return <div className="speed-line placeholder" aria-hidden="true" />;
+  }
   const tiers = speedTiers(baseSpeed);
   const cells: Array<[string, number]> = [
     ["0", tiers.noInvest],
