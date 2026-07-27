@@ -17,6 +17,9 @@ struct PokemonDetectionControlStateTests {
         var state = PokemonDetectionControlState()
         try state.startDetection()
 
+        #expect(state.runID == 1)
+        #expect(state.revision == 1)
+
         let first = try state.recordPresence(playerPresence())
         let second = try state.recordPresence(opponentPresence())
 
@@ -26,6 +29,7 @@ struct PokemonDetectionControlStateTests {
         #expect(state.player?.pokemon == "Raichu")
         #expect(state.opponent?.pokemon == "Garchomp")
         #expect(state.failedSides.isEmpty)
+        #expect(state.revision == 3)
     }
 
     @Test
@@ -72,6 +76,8 @@ struct PokemonDetectionControlStateTests {
         try state.startDetection()
 
         #expect(state.status == .detecting)
+        #expect(state.runID == 2)
+        #expect(state.revision == 4)
         #expect(state.player == nil)
         #expect(state.opponent == nil)
         #expect(state.failedSides.isEmpty)
@@ -89,6 +95,7 @@ struct PokemonDetectionControlStateTests {
         #expect(state.player?.pokemon == "Raichu")
         #expect(state.opponent == nil)
         #expect(state.failedSides == [.opponent])
+        #expect(state.revision == 3)
     }
 
     private func playerPresence() -> DetectedPokemonPresence {

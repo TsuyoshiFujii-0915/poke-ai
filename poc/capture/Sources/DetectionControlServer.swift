@@ -74,6 +74,8 @@ private struct HTTPRequestHead {
 
 private struct DetectionStateEvent: Encodable {
     let type: String
+    let runID: UInt64
+    let revision: UInt64
     let status: PokemonDetectionStatus
     let player: DetectedPokemonPresence?
     let opponent: DetectedPokemonPresence?
@@ -81,6 +83,8 @@ private struct DetectionStateEvent: Encodable {
 
     private enum CodingKeys: String, CodingKey {
         case type
+        case runID
+        case revision
         case status
         case player
         case opponent
@@ -90,6 +94,8 @@ private struct DetectionStateEvent: Encodable {
     func encode(to encoder: Encoder) throws -> Void {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(type, forKey: .type)
+        try container.encode(runID, forKey: .runID)
+        try container.encode(revision, forKey: .revision)
         try container.encode(status, forKey: .status)
         if let player {
             try container.encode(player, forKey: .player)
@@ -168,14 +174,9 @@ final class DetectionControlServer {
                 case .ignored:
                     return
                 case let .presenceAccepted(resolution):
-                    broadcastEvent(json: json)
-                    try finishDetectionIfCompleted(resolution: resolution)
+                    try publishAcceptedResolution(resolution)
                 case let .failureAccepted(resolution):
-                    if resolution == .completed {
-                        try finishDetectionIfCompleted(resolution: resolution)
-                    } else {
-                        broadcastEvent(json: try stateJSON())
-                    }
+                    try publishAcceptedResolution(resolution)
                 }
             } catch {
                 log("エラー: 認識イベントの配信に失敗: \(error)")
@@ -351,9 +352,21 @@ final class DetectionControlServer {
         log("ポケモン名の手動検出を終了")
     }
 
+    private func publishAcceptedResolution(
+        _ resolution: PokemonDetectionResolution
+    ) throws -> Void {
+        if resolution == .completed {
+            try finishDetectionIfCompleted(resolution: resolution)
+        } else {
+            broadcastEvent(json: try stateJSON())
+        }
+    }
+
     private func stateJSON() throws -> String {
         let event = DetectionStateEvent(
             type: "detection_state",
+            runID: state.runID,
+            revision: state.revision,
             status: state.status,
             player: state.player,
             opponent: state.opponent,

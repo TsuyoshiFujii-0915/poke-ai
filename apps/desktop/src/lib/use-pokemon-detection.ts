@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  applyDetectionResult,
   applyServerSnapshot,
   applyUserSelection,
   createDetectionSelectionState,
@@ -34,14 +33,8 @@ export function usePokemonDetection(): PokemonDetectionControl {
     events.onmessage = (message: MessageEvent<string>): void => {
       try {
         const event = parseDetectionServerMessage(message.data);
-        if (event.type === "detection_state") {
-          setSelection((current) => applyServerSnapshot(current, event));
-          setError(detectionFailureMessage(event));
-        } else {
-          setSelection((current) =>
-            applyDetectionResult(current, event.side, event.pokemon),
-          );
-        }
+        setSelection((current) => applyServerSnapshot(current, event));
+        setError(detectionFailureMessage(event));
         setSynchronized(true);
       } catch (cause) {
         setSynchronized(false);
@@ -69,9 +62,6 @@ export function usePokemonDetection(): PokemonDetectionControl {
         throw new Error(`HTTP ${response.status}: ${detail}`);
       }
       const snapshot = parseDetectionServerMessage(await response.text());
-      if (snapshot.type !== "detection_state") {
-        throw new Error("detection response is not a detection state");
-      }
       setSelection((current) => applyServerSnapshot(current, snapshot));
       setSynchronized(true);
       setError(detectionFailureMessage(snapshot));

@@ -27,6 +27,8 @@ public struct DetectedPokemonPresence: Codable, Equatable, Sendable {
 public enum PokemonDetectionControlError: Error, Equatable {
     case detectionAlreadyRunning
     case detectionNotRunning
+    case runIdentifierOverflow
+    case revisionOverflow
 }
 
 public enum PokemonDetectionResolution: Equatable, Sendable {
@@ -37,6 +39,8 @@ public enum PokemonDetectionResolution: Equatable, Sendable {
 
 public struct PokemonDetectionControlState: Equatable, Sendable {
     public private(set) var status: PokemonDetectionStatus
+    public private(set) var runID: UInt64
+    public private(set) var revision: UInt64
     public private(set) var player: DetectedPokemonPresence?
     public private(set) var opponent: DetectedPokemonPresence?
     public private(set) var failedSides: [BattleSide]
@@ -44,6 +48,8 @@ public struct PokemonDetectionControlState: Equatable, Sendable {
 
     public init() {
         self.status = .idle
+        self.runID = 0
+        self.revision = 0
         self.player = nil
         self.opponent = nil
         self.failedSides = []
@@ -54,6 +60,12 @@ public struct PokemonDetectionControlState: Equatable, Sendable {
         guard status == .idle else {
             throw PokemonDetectionControlError.detectionAlreadyRunning
         }
+        let (nextRunID, runOverflow) = runID.addingReportingOverflow(1)
+        guard !runOverflow else {
+            throw PokemonDetectionControlError.runIdentifierOverflow
+        }
+        try advanceRevision()
+        runID = nextRunID
         status = .detecting
         player = nil
         opponent = nil
@@ -68,6 +80,7 @@ public struct PokemonDetectionControlState: Equatable, Sendable {
         guard !resolvedSides.contains(presence.side) else {
             return .alreadyResolved
         }
+        try advanceRevision()
         switch presence.side {
         case .player:
             player = presence
@@ -85,6 +98,7 @@ public struct PokemonDetectionControlState: Equatable, Sendable {
         guard !resolvedSides.contains(side) else {
             return .alreadyResolved
         }
+        try advanceRevision()
         resolvedSides.insert(side)
         failedSides.append(side)
         failedSides.sort { $0.rawValue < $1.rawValue }
@@ -95,6 +109,7 @@ public struct PokemonDetectionControlState: Equatable, Sendable {
         guard status == .detecting else {
             throw PokemonDetectionControlError.detectionNotRunning
         }
+        try advanceRevision()
         for side in BattleSide.allCases where !resolvedSides.contains(side) {
             resolvedSides.insert(side)
             failedSides.append(side)
@@ -115,5 +130,13 @@ public struct PokemonDetectionControlState: Equatable, Sendable {
         }
         status = .idle
         return .completed
+    }
+
+    private mutating func advanceRevision() throws -> Void {
+        let (nextRevision, overflow) = revision.addingReportingOverflow(1)
+        guard !overflow else {
+            throw PokemonDetectionControlError.revisionOverflow
+        }
+        revision = nextRevision
     }
 }
