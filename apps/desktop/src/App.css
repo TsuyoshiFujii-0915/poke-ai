@@ -113,17 +113,13 @@ body {
   box-shadow: 0 0 7px rgba(87, 179, 255, 0.4);
 }
 
-.detection-trigger-icon {
+.detection-refresh-icon {
   overflow: visible;
-}
-
-.detection-scan-line {
-  transform-box: fill-box;
   transform-origin: center;
 }
 
-.detection-trigger-button.detecting .detection-scan-line {
-  animation: detection-scan 0.8s ease-in-out infinite;
+.detection-trigger-button.detecting .detection-refresh-icon {
+  animation: detection-rotate 0.8s linear infinite;
 }
 
 .detection-trigger-button:disabled {
@@ -131,16 +127,9 @@ body {
   opacity: 0.5;
 }
 
-@keyframes detection-scan {
-  0%,
-  100% {
-    opacity: 0.45;
-    transform: translateY(-2.5px);
-  }
-
-  50% {
-    opacity: 1;
-    transform: translateY(2.5px);
+@keyframes detection-rotate {
+  to {
+    transform: rotate(360deg);
   }
 }
 
