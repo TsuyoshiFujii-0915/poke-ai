@@ -65,6 +65,33 @@ function useAbilityCandidates(species: string): NameEntry[] {
 const SELECTABLE_SPECIES = speciesEntries();
 const SELECTABLE_SPECIES_NAMES = SELECTABLE_SPECIES.map((entry) => entry.en);
 
+function DetectionScanIcon(): ReactNode {
+  return (
+    <svg
+      className="detection-trigger-icon"
+      viewBox="0 0 20 20"
+      width="13"
+      height="13"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M7 3H5a2 2 0 0 0-2 2v2m10-4h2a2 2 0 0 1 2 2v2M3 13v2a2 2 0 0 0 2 2h2m6 0h2a2 2 0 0 0 2-2v-2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        className="detection-scan-line"
+        d="M5.5 10h9"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** モンスターボールのラインアイコン（色は親のcurrentColorに従う） */
 function BallIcon(): ReactNode {
   return (
@@ -492,8 +519,7 @@ export function MatchupPanel() {
           title={detection.selection.status === "detecting" ? "検出中" : "ポケモン名を検出"}
           onClick={() => void detection.detect()}
         >
-          <span className="detection-trigger-indicator" aria-hidden="true" />
-          検出
+          <DetectionScanIcon />
         </button>
         {detection.error && (
           <span
