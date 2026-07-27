@@ -50,6 +50,15 @@ private struct DetectionDiagnosticEvent: Encodable {
     let detail: String
 }
 
+private struct RecognitionSampleDiagnosticEvent: Encodable {
+    let type: String
+    let timestamp: String
+    let side: String
+    let generation: UInt64
+    let requestID: UInt64
+    let detail: String
+}
+
 private struct RecognitionPipelineFailureEvent: Encodable {
     let type: String
     let timestamp: String
@@ -130,6 +139,20 @@ private final class LiveRecognitionEventSink {
         exit(1)
     }
 
+    func emitRecognitionSample(
+        request: LiveNameRecognitionRequest,
+        outcome: PokemonNameDetectionOutcome
+    ) -> Void {
+        emit(RecognitionSampleDiagnosticEvent(
+            type: "pokemon_recognition_sample",
+            timestamp: formatter.string(from: Date()),
+            side: request.side.rawValue,
+            generation: request.generation,
+            requestID: request.requestID,
+            detail: "\(describe(request.kind)): \(describe(outcome))"
+        ))
+    }
+
     private func emitStatus(_ status: LiveNameDetectionStatus) -> Void {
         let side: BattleSide
         let name: String
@@ -161,13 +184,25 @@ private final class LiveRecognitionEventSink {
     private func describe(_ outcome: PokemonNameDetectionOutcome) -> String {
         switch outcome {
         case let .detected(detection):
-            return "unexpected candidate \(detection.candidate.id)"
+            return "candidate=\(detection.candidate.id) raw='\(detection.rawText)' confidence=\(detection.visionConfidence) editDistance=\(detection.editDistance)"
         case .noText:
             return "no text"
-        case let .noMatch(_, rawText, _):
-            return "no catalog match for '\(rawText)'"
+        case let .noMatch(_, rawText, recognizedTexts):
+            let observations = recognizedTexts.map {
+                "'\($0.text)'(\($0.confidence))"
+            }.joined(separator: ", ")
+            return "no catalog match for '\(rawText)'; observations=[\(observations)]"
         case let .ambiguous(_, rawText, candidates):
             return "ambiguous text '\(rawText)' for \(candidates.map(\.id))"
+        }
+    }
+
+    private func describe(_ kind: LiveNameRecognitionKind) -> String {
+        switch kind {
+        case .probe:
+            return "probe"
+        case let .confirmation(attempt, sampleIndex):
+            return "confirmation attempt=\(attempt) sample=\(sampleIndex + 1)"
         }
     }
 
@@ -250,26 +285,7 @@ final class LivePokemonNameDetector {
         eventPublisher: @escaping (String) -> Void
     ) throws {
         let profile = try CaptureLayoutProfile.ipadBattleHUDV1()
-        let consensus = try PokemonNameConsensusPolicy(
-            exactMatchMinimumCount: 3,
-            exactMatchMinimumMedianConfidence: 0.5,
-            correctedMatchMinimumCount: 4,
-            correctedMatchMinimumMedianConfidence: 0.7
-        )
-        let policy = try LiveNameDetectionPolicy(
-            sampleInterval: 0.125,
-            changeDifferenceThreshold: 0.02,
-            stableDifferenceThreshold: 0.006,
-            changedSampleCount: 3,
-            changeWindowSize: 5,
-            stableSampleCount: 3,
-            heartbeatInterval: 3.0,
-            recognitionSampleInterval: 0.15,
-            recognitionSampleCount: 5,
-            maximumBurstAttempts: 3,
-            retryInterval: 0.5,
-            consensus: consensus
-        )
+        let policy = try ChampionsNameDetectionPolicy.make()
         let extractor = try NameRegionSignatureExtractor(
             profile: profile,
             columnCount: 32,
@@ -427,6 +443,7 @@ final class LivePokemonNameDetector {
             guard var detector = detectors[request.side] else {
                 throw RecognitionStreamError.missingDetector(request.side)
             }
+            eventSink.emitRecognitionSample(request: request, outcome: outcome)
             let outputs = try detector.consume(recognition: PokemonRecognitionSample(
                 side: request.side,
                 requestID: request.requestID,
