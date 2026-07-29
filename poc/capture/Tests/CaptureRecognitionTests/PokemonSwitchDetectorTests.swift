@@ -187,7 +187,7 @@ struct PokemonSwitchDetectorTests {
     }
 
     @Test
-    func requiresFourVotesAndConfidenceForOneEditCorrection() throws -> Void {
+    func requiresFourVotesButNotVisionConfidenceForOneEditCorrection() throws -> Void {
         let consensus = PokemonNameRecognitionConsensus(policy: try makeConsensusPolicy())
         let corrected = detection(id: "Garchomp", name: "ガブリアス", distance: 1, confidence: 0.8)
         let lowConfidence = detection(id: "Garchomp", name: "ガブリアス", distance: 1, confidence: 0.6)
@@ -199,7 +199,7 @@ struct PokemonSwitchDetectorTests {
         #expect(consensus.resolve([
             .detected(lowConfidence), .detected(lowConfidence), .detected(lowConfidence),
             .detected(lowConfidence), .noText(.player),
-        ]) == .unconfirmed)
+        ]) != .unconfirmed)
 
         let accepted = consensus.resolve([
             .detected(corrected), .detected(corrected), .detected(corrected),
@@ -323,9 +323,7 @@ struct PokemonSwitchDetectorTests {
     private func makeConsensusPolicy() throws -> PokemonNameConsensusPolicy {
         try PokemonNameConsensusPolicy(
             exactMatchMinimumCount: 3,
-            exactMatchMinimumMedianConfidence: 0.5,
-            correctedMatchMinimumCount: 4,
-            correctedMatchMinimumMedianConfidence: 0.7
+            correctedMatchMinimumCount: 4
         )
     }
 

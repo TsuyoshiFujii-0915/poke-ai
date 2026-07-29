@@ -17,15 +17,11 @@ public enum LiveNameDetectionError: Error, Equatable {
 
 public struct PokemonNameConsensusPolicy: Equatable, Sendable {
     public let exactMatchMinimumCount: Int
-    public let exactMatchMinimumMedianConfidence: Float
     public let correctedMatchMinimumCount: Int
-    public let correctedMatchMinimumMedianConfidence: Float
 
     public init(
         exactMatchMinimumCount: Int,
-        exactMatchMinimumMedianConfidence: Float,
-        correctedMatchMinimumCount: Int,
-        correctedMatchMinimumMedianConfidence: Float
+        correctedMatchMinimumCount: Int
     ) throws {
         guard exactMatchMinimumCount > 0 else {
             throw LiveNameDetectionError.invalidCount("exactMatchMinimumCount", exactMatchMinimumCount)
@@ -33,18 +29,8 @@ public struct PokemonNameConsensusPolicy: Equatable, Sendable {
         guard correctedMatchMinimumCount > 0 else {
             throw LiveNameDetectionError.invalidCount("correctedMatchMinimumCount", correctedMatchMinimumCount)
         }
-        try Self.validateScore(exactMatchMinimumMedianConfidence, name: "exactMatchMinimumMedianConfidence")
-        try Self.validateScore(correctedMatchMinimumMedianConfidence, name: "correctedMatchMinimumMedianConfidence")
         self.exactMatchMinimumCount = exactMatchMinimumCount
-        self.exactMatchMinimumMedianConfidence = exactMatchMinimumMedianConfidence
         self.correctedMatchMinimumCount = correctedMatchMinimumCount
-        self.correctedMatchMinimumMedianConfidence = correctedMatchMinimumMedianConfidence
-    }
-
-    private static func validateScore(_ value: Float, name: String) throws -> Void {
-        guard value.isFinite, value >= 0, value <= 1 else {
-            throw LiveNameDetectionError.invalidScore(name, value)
-        }
     }
 }
 

@@ -22,16 +22,14 @@ public struct PokemonNameRecognitionConsensus: Sendable {
         }
 
         let exactCount = winner.filter { $0.editDistance == 0 }.count
-        let medianConfidence = median(winner.map(\.visionConfidence))
         let acceptedExact = exactCount >= policy.exactMatchMinimumCount
-            && medianConfidence >= policy.exactMatchMinimumMedianConfidence
         let acceptedCorrection = winner.count >= policy.correctedMatchMinimumCount
-            && medianConfidence >= policy.correctedMatchMinimumMedianConfidence
         guard acceptedExact || acceptedCorrection,
               let representative = winner.max(by: { $0.visionConfidence < $1.visionConfidence }) else {
             return .unconfirmed
         }
 
+        let medianConfidence = median(winner.map(\.visionConfidence))
         guard let minimumEditDistance = winner.map(\.editDistance).min() else {
             return .unconfirmed
         }

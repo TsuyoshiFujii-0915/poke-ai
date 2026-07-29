@@ -67,12 +67,12 @@ The live detector processes the source `CVPixelBuffer` before JPEG encoding. Eac
 - Hidden HUD frames never count as switch evidence.
 - Three changed samples in a five-sample window identify a possible change.
 - Three consecutive frames must be visible, changed from the confirmed HUD, and stable relative to the preceding frame before a background OCR probe starts.
-- The public state remains stable while the probe is pending. Only a confident exact match for a different Pokémon starts a transition.
+- The public state remains stable while the probe is pending. Only an exact match for a different Pokémon starts a transition.
 - A probe that finds the current Pokémon refreshes the comparison signature without emitting a duplicate event. An inconclusive probe discards the accumulated visual evidence and delays visual retry until the heartbeat interval.
 - After an exact different-name probe, five-frame confirmation starts immediately and accepts visible frames even while the battle background is moving.
 - If the HUD becomes hidden during switch confirmation, OCR resumes after three consecutive visible frames. Initial detection still requires pixel stability.
 - Confirmation uses five distinct frames, with up to three burst attempts.
-- Exact names require three votes. One-edit corrections require four votes and a confidence threshold.
+- Exact names require three votes, and one-edit corrections require four votes. Vision confidence is retained only as diagnostic metadata.
 - A three-second accurate Japanese OCR probe recovers visual transitions that the signature detector missed. The target Vision runtime does not support Japanese in fast mode.
 - Vision runs on a dedicated serial queue, so OCR does not block capture or MJPEG encoding.
 - Results from an invalidated generation are reported as stale and cannot update the detected Pokémon.

@@ -305,8 +305,7 @@ public struct PokemonSwitchDetector: Sendable {
             )
             return [.probeRejected(side, generation, outcome)]
         }
-        guard detection.editDistance == 0,
-              detection.visionConfidence >= policy.consensus.exactMatchMinimumMedianConfidence else {
+        guard detection.editDistance == 0 else {
             phase = .stable(
                 current,
                 changeWindow: [],

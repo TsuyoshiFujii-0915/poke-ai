@@ -4,9 +4,7 @@ public enum ChampionsNameDetectionPolicy {
     public static func make() throws -> LiveNameDetectionPolicy {
         let consensus = try PokemonNameConsensusPolicy(
             exactMatchMinimumCount: 3,
-            exactMatchMinimumMedianConfidence: 0.5,
-            correctedMatchMinimumCount: 4,
-            correctedMatchMinimumMedianConfidence: 0.5
+            correctedMatchMinimumCount: 4
         )
         return try LiveNameDetectionPolicy(
             sampleInterval: 0.125,

@@ -4,14 +4,14 @@ import Testing
 @Suite
 struct ChampionsNameDetectionPolicyTests {
     @Test
-    func acceptsFourConsistentOneEditReadingsAtObservedVisionConfidence() throws -> Void {
+    func acceptsConsistentKingambitReadingsRegardlessOfVisionConfidence() throws -> Void {
         let policy = try ChampionsNameDetectionPolicy.make()
         let consensus = PokemonNameRecognitionConsensus(policy: policy.consensus)
         let corrected = PokemonNameDetection(
             side: .opponent,
             candidate: PokemonNameCandidate(id: "Kingambit", displayName: "ドドゲザン"),
-            rawText: "ドドゲサン",
-            visionConfidence: 0.5,
+            rawText: "ドドグザン",
+            visionConfidence: 0.3,
             editDistance: 1
         )
 
@@ -28,7 +28,7 @@ struct ChampionsNameDetectionPolicyTests {
             return
         }
         #expect(detection.candidate.id == "Kingambit")
-        #expect(detection.visionConfidence == 0.5)
+        #expect(detection.visionConfidence == 0.3)
         #expect(detection.editDistance == 1)
     }
 }
