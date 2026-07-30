@@ -86,8 +86,8 @@ body {
 }
 
 .environment-trigger {
-  width: 76px;
-  height: 22px;
+  width: var(--context-control-width);
+  height: var(--context-control-height);
   padding: 0 8px;
   display: flex;
   align-items: center;
@@ -351,6 +351,8 @@ body {
      上段 = 自分の攻撃 → 相手の残りHP
      下段 = 相手の攻撃 → 自分の残りHP */
 .matchup-panel {
+  --context-control-width: 76px;
+  --context-control-height: 22px;
   position: relative;
   height: 100%;
   padding: 12px 18px;
@@ -589,6 +591,7 @@ body {
    固定基準の高さ（狭いときは縮む）。flex-growさせないことで
    カラム全体が中央にまとまり、上下に余白が生まれる */
 .poke-art {
+  --center-edge-offset: 6px;
   position: relative;
   flex: 0 1 140px;
   min-height: 40px;
@@ -616,12 +619,12 @@ body {
 }
 
 .wall-control.mine {
-  right: 2px;
+  right: var(--center-edge-offset);
   color: color-mix(in srgb, var(--mine) 50%, transparent);
 }
 
 .wall-control.opp {
-  left: 2px;
+  left: var(--center-edge-offset);
   color: color-mix(in srgb, var(--opp) 50%, transparent);
 }
 
@@ -662,11 +665,11 @@ body {
 }
 
 .poke-art.mine .speed-badge {
-  right: 6px;
+  right: var(--center-edge-offset);
 }
 
 .poke-art.opp .speed-badge {
-  left: 6px;
+  left: var(--center-edge-offset);
 }
 
 .speed-badge .stat-letter {
@@ -823,8 +826,8 @@ body {
 
 .detection-vs-button {
   position: relative;
-  width: 56px;
-  height: 24px;
+  width: var(--context-control-width);
+  height: var(--context-control-height);
   display: grid;
   place-items: center;
   font-size: 10px;
