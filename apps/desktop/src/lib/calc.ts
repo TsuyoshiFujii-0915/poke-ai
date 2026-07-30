@@ -16,6 +16,12 @@
 
 import { calculate, Field, Move, Pokemon, type State } from "@smogon/calc";
 import { resolveAbilityForDamage, type DamageRole } from "./ability-calculation";
+import {
+  resolveBattleField,
+  type BattleEnvironment,
+  type DamageDirection,
+  type DamageMoveCategory,
+} from "./battle-environment";
 import { validateAbilitySelection } from "./ability-selection";
 import {
   stageKeysForDamageCategory,
@@ -258,8 +264,22 @@ function megaSolApplies(move: Move, attackerAbility: string): boolean {
   );
 }
 
-function championsField(move: Move, attackerAbility: string): Field {
-  return new Field(megaSolApplies(move, attackerAbility) ? { weather: "Sun" } : {});
+function championsField(
+  move: Move,
+  attackerAbility: string,
+  environment: BattleEnvironment,
+  direction: DamageDirection,
+  category: DamageMoveCategory,
+): Field {
+  const resolved = resolveBattleField(environment, direction, category);
+  return new Field({
+    weather: megaSolApplies(move, attackerAbility) ? "Sun" : resolved.weather,
+    terrain: resolved.terrain,
+    defenderSide: {
+      isReflect: resolved.isReflect,
+      isLightScreen: resolved.isLightScreen,
+    },
+  });
 }
 
 interface DamageRun {
@@ -268,7 +288,15 @@ interface DamageRun {
   defenderAbilityApplied: boolean;
 }
 
-function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: string): DamageRun {
+function runOne(
+  attacker: Pokemon,
+  defender: Pokemon,
+  moveEn: string,
+  label: string,
+  environment: BattleEnvironment,
+  direction: DamageDirection,
+  category: DamageMoveCategory,
+): DamageRun {
   if (!attacker.ability) throw new Error("attacker ability is not selected");
   const attackerAbility = attacker.ability;
   const moveResolution = championsMove(moveEn, attackerAbility, attacker.abilityOn === true);
@@ -278,7 +306,7 @@ function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: str
     prepareAttackerAbility(attacker),
     applyDamageAbility(defender, "defender"),
     move,
-    championsField(move, attackerAbility),
+    championsField(move, attackerAbility, environment, direction, category),
   );
   const range = result.range();
   const maxHP = result.defender.maxHP();
@@ -314,7 +342,11 @@ function waitingResult(moveEn: string, error: string): DirectionResult {
 }
 
 /** 自分→相手: 相手の耐久3プリセット（能力ポイント想定） */
-export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionResult {
+export function calcMyAttack(
+  me: MySideConfig,
+  opp: OpponentConfig,
+  environment: BattleEnvironment,
+): DirectionResult {
   if (!me.species || !opp.species || !me.move) {
     return waitingResult(me.move ?? "", "入力待ち");
   }
@@ -351,7 +383,15 @@ export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionRe
         abilityTriggerActive: opp.abilityTriggerActive,
         stages: opp.stages,
       });
-      return runOne(attacker, defender, me.move!, label);
+      return runOne(
+        attacker,
+        defender,
+        me.move!,
+        label,
+        environment,
+        "player-attacks",
+        category,
+      );
     });
     return {
       moveEn: me.move,
@@ -365,7 +405,11 @@ export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionRe
 }
 
 /** 相手→自分: 相手の火力3プリセット（能力ポイント想定） */
-export function calcOpponentAttack(me: MySideConfig, opp: OpponentConfig): DirectionResult {
+export function calcOpponentAttack(
+  me: MySideConfig,
+  opp: OpponentConfig,
+  environment: BattleEnvironment,
+): DirectionResult {
   if (!me.species || !opp.species || !opp.move) {
     return waitingResult(opp.move ?? "", "入力待ち");
   }
@@ -403,7 +447,15 @@ export function calcOpponentAttack(me: MySideConfig, opp: OpponentConfig): Direc
         abilityTriggerActive: opp.abilityTriggerActive,
         stages: opp.stages,
       });
-      return runOne(attacker, defender, opp.move!, label);
+      return runOne(
+        attacker,
+        defender,
+        opp.move!,
+        label,
+        environment,
+        "opponent-attacks",
+        category,
+      );
     });
     return {
       moveEn: opp.move,

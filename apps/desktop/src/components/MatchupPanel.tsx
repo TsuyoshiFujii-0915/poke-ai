@@ -27,6 +27,12 @@ import {
 } from "../lib/dex";
 import { reconcileAbilitySelection } from "../lib/ability-selection";
 import { isManualAbilityTrigger } from "../lib/ability-calculation";
+import {
+  createBattleEnvironment,
+  type BattleTerrain,
+  type BattleWeather,
+} from "../lib/battle-environment";
+import { detectionControlContent } from "../lib/detection-state";
 import { jaAbility, jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
 import { normalizePointInput } from "../lib/point-input";
 import {
@@ -65,27 +71,6 @@ function useAbilityCandidates(species: string): NameEntry[] {
 
 const SELECTABLE_SPECIES = speciesEntries();
 const SELECTABLE_SPECIES_NAMES = SELECTABLE_SPECIES.map((entry) => entry.en);
-
-function DetectionRefreshIcon(): ReactNode {
-  return (
-    <svg
-      className="detection-refresh-icon"
-      viewBox="0 0 20 20"
-      width="13"
-      height="13"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M16.8 7.5A7 7 0 0 0 4.9 5.1L3 7m0-4v4h4m-3.8 5.5a7 7 0 0 0 11.9 2.4L17 13m0 4v-4h-4"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 /** モンスターボールのラインアイコン（色は親のcurrentColorに従う） */
 function BallIcon(): ReactNode {
@@ -240,6 +225,166 @@ function AbilityActivationControl({
   );
 }
 
+function WallIcon(): ReactNode {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
+      <path
+        d="M12 2.8 20 6v5.4c0 4.8-3.1 8.2-8 10-4.9-1.8-8-5.2-8-10V6l8-3.2Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path d="M8 9.2h8M8 12h8M9.5 14.8h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function WallControl({
+  side,
+  active,
+  disabled,
+  onChange,
+}: {
+  side: "mine" | "opp";
+  active: boolean;
+  disabled: boolean;
+  onChange: (active: boolean) => void;
+}): ReactNode {
+  const sideLabel = side === "mine" ? "自分側" : "相手側";
+  return (
+    <button
+      type="button"
+      className={`wall-control ${side} ${active ? "active" : ""}`}
+      aria-label={`${sideLabel}の壁補正${active ? "を解除" : "を有効化"}`}
+      aria-pressed={active}
+      disabled={disabled}
+      title={`${sideLabel}の壁補正`}
+      onClick={() => onChange(!active)}
+    >
+      <WallIcon />
+    </button>
+  );
+}
+
+interface EnvironmentChoice<T extends EnvironmentValue> {
+  value: T;
+  label: string;
+}
+
+type EnvironmentValue = BattleWeather | BattleTerrain;
+
+const WEATHER_CHOICES: Array<EnvironmentChoice<BattleWeather>> = [
+  { value: "None", label: "なし" },
+  { value: "Sun", label: "晴れ" },
+  { value: "Rain", label: "雨" },
+  { value: "Sand", label: "砂嵐" },
+  { value: "Snow", label: "雪" },
+];
+
+const TERRAIN_CHOICES: Array<EnvironmentChoice<BattleTerrain>> = [
+  { value: "None", label: "なし" },
+  { value: "Electric", label: "エレキフィールド" },
+  { value: "Grassy", label: "グラスフィールド" },
+  { value: "Psychic", label: "サイコフィールド" },
+  { value: "Misty", label: "ミストフィールド" },
+];
+
+function EnvironmentGlyph({ value }: { value: EnvironmentValue }): ReactNode {
+  if (value === "None") {
+    return null;
+  }
+  if (value === "Sun") {
+    return <span className="environment-symbol" aria-hidden="true">☀</span>;
+  }
+  if (value === "Rain") {
+    return <span className="environment-symbol" aria-hidden="true">☂</span>;
+  }
+  if (value === "Sand") {
+    return <span className="environment-symbol wind" aria-hidden="true">≋</span>;
+  }
+  if (value === "Snow") {
+    return <span className="environment-symbol" aria-hidden="true">❄</span>;
+  }
+  if (value === "Electric") {
+    return <span className="environment-symbol" aria-hidden="true">ϟ</span>;
+  }
+  if (value === "Grassy") {
+    return <span className="environment-symbol" aria-hidden="true">♧</span>;
+  }
+  if (value === "Psychic") {
+    return <span className="environment-symbol" aria-hidden="true">◉</span>;
+  }
+  if (value === "Misty") {
+    return <span className="environment-symbol wind" aria-hidden="true">≋</span>;
+  }
+  throw new Error(`unsupported environment icon: ${value satisfies never}`);
+}
+
+function EnvironmentControl<T extends EnvironmentValue>({
+  label,
+  value,
+  choices,
+  placement,
+  onChange,
+}: {
+  label: "WEATHER" | "FIELD";
+  value: T;
+  choices: Array<EnvironmentChoice<T>>;
+  placement: "upper" | "lower";
+  onChange: (value: T) => void;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  const selected = choices.find((choice) => choice.value === value);
+  if (selected === undefined) {
+    throw new Error(`${label} has an unsupported selection: ${value}`);
+  }
+  const active = value !== "None";
+
+  return (
+    <div
+      className={`environment-control ${placement}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className={`environment-trigger ${active ? "active" : ""}`}
+        aria-label={`${label}: ${selected.label}`}
+        aria-expanded={open}
+        title={`${label}: ${selected.label}`}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {active ? <EnvironmentGlyph value={value} /> : label}
+      </button>
+      {open && (
+        <div className="environment-menu" role="menu">
+          {choices.map((choice) => (
+            <button
+              key={choice.value}
+              type="button"
+              className={choice.value === value ? "selected" : ""}
+              role="menuitemradio"
+              aria-checked={choice.value === value}
+              onClick={() => {
+                onChange(choice.value);
+                setOpen(false);
+              }}
+            >
+              <span className="environment-menu-icon">
+                <EnvironmentGlyph value={choice.value} />
+              </span>
+              {choice.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * アイコン付き入力行。アイコンが項目種別（ボール=ポケモン、@=持ち物）と
  * 自分/相手（色）を同時に表すため、テキストラベルは置かない。
@@ -254,11 +399,27 @@ function IconRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
 }
 
 /** Renders mirrored official artwork and a base Speed badge for either battle side. */
-function PokemonArt({ species, side }: { species: string; side: "mine" | "opp" }) {
+function PokemonArt({
+  species,
+  side,
+  wallActive,
+  onWallChange,
+}: {
+  species: string;
+  side: "mine" | "opp";
+  wallActive: boolean;
+  onWallChange: (active: boolean) => void;
+}) {
   const artworkId = species ? getArtworkId(species) : null;
   const baseSpeed = species ? getBaseSpeed(species) : null;
   return (
     <div className={`poke-art ${side}`}>
+      <WallControl
+        side={side}
+        active={wallActive}
+        disabled={!species}
+        onChange={onWallChange}
+      />
       {artworkId ? (
         <img
           src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${artworkId}.png`}
@@ -491,6 +652,7 @@ export function MatchupPanel() {
     move: "",
     stages: createNeutralStatStages(),
   });
+  const [environment, setEnvironment] = useState(createBattleEnvironment);
   const detection = usePokemonDetection();
 
   useEffect(() => {
@@ -532,41 +694,36 @@ export function MatchupPanel() {
   const myStageKeys = useMemo(() => damageStageKeysForMove(me.move ?? ""), [me.move]);
   const oppStageKeys = useMemo(() => damageStageKeysForMove(opp.move ?? ""), [opp.move]);
 
-  const myAttack = useMemo(() => calcMyAttack(me, opp), [me, opp]);
-  const oppAttack = useMemo(() => calcOpponentAttack(me, opp), [me, opp]);
+  const myAttack = useMemo(() => calcMyAttack(me, opp, environment), [me, opp, environment]);
+  const oppAttack = useMemo(
+    () => calcOpponentAttack(me, opp, environment),
+    [me, opp, environment],
+  );
   const myAutomaticAbilityActive =
     myAttack.attackerAbilityApplied || oppAttack.defenderAbilityApplied;
   const oppAutomaticAbilityActive =
     oppAttack.attackerAbilityApplied || myAttack.defenderAbilityApplied;
+  const detectionContent = detectionControlContent(
+    detection.selection,
+    detection.requestingDetection,
+  );
 
   return (
     <div className="matchup-panel">
-      <div className="detection-control" aria-label="画面からポケモン名を検出">
-        <button
-          type="button"
-          aria-busy={detection.selection.status === "detecting"}
-          aria-label="現在の対戦画面から両方のポケモン名を検出"
-          className={`detection-trigger-button ${detection.selection.status === "detecting" ? "detecting" : ""}`}
-          disabled={
-            detection.requestingDetection ||
-            detection.selection.status === "detecting" ||
-            !detection.synchronized
-          }
-          title={detection.selection.status === "detecting" ? "検出中" : "ポケモン名を検出"}
-          onClick={() => void detection.detect()}
-        >
-          <DetectionRefreshIcon />
-        </button>
-        {detection.error && (
-          <span
-            className="detection-error"
-            title={detection.error}
-            aria-label={detection.error}
-          >
-            !
-          </span>
-        )}
-      </div>
+      <EnvironmentControl
+        label="WEATHER"
+        value={environment.weather}
+        choices={WEATHER_CHOICES}
+        placement="upper"
+        onChange={(weather) => setEnvironment((current) => ({ ...current, weather }))}
+      />
+      <EnvironmentControl
+        label="FIELD"
+        value={environment.terrain}
+        choices={TERRAIN_CHOICES}
+        placement="lower"
+        onChange={(terrain) => setEnvironment((current) => ({ ...current, terrain }))}
+      />
       {/* 左: 自分のポケモン。相手側と高さが対角対応するよう
           ポケモン名・持ち物を上、公式絵を中、能力ポイントを下に置く */}
       <div className="side-col mine">
@@ -615,7 +772,14 @@ export function MatchupPanel() {
             />
           </IconRow>
         </div>
-        <PokemonArt species={me.species} side="mine" />
+        <PokemonArt
+          species={me.species}
+          side="mine"
+          wallActive={environment.playerWallActive}
+          onWallChange={(playerWallActive) =>
+            setEnvironment((current) => ({ ...current, playerWallActive }))
+          }
+        />
         <PointsInput me={me} onChange={(patch) => setMe({ ...me, ...patch })} />
       </div>
 
@@ -652,7 +816,24 @@ export function MatchupPanel() {
               onChange={(stages) => setOpp((current) => ({ ...current, stages }))}
             />
           </div>
-          <span className="vs-badge" aria-hidden="true">VS</span>
+          <button
+            type="button"
+            className={`detection-vs-button ${detectionContent}`}
+            aria-label="現在の対戦画面から両方のポケモン名を検出"
+            aria-busy={detectionContent === "loading"}
+            disabled={
+              detection.requestingDetection ||
+              detection.selection.status === "detecting" ||
+              !detection.synchronized
+            }
+            title={detection.error ?? "ポケモン名を再検出"}
+            onClick={() => void detection.detect()}
+          >
+            {detectionContent === "loading"
+              ? <span className="detection-spinner" aria-hidden="true" />
+              : detectionContent.toUpperCase()}
+            {detection.error && <span className="detection-error" aria-hidden="true">!</span>}
+          </button>
           <div className="vs-stage-control lower leading">
             <DamageStageCounter
               stageKey={oppStageKeys?.defender ?? null}
@@ -689,7 +870,14 @@ export function MatchupPanel() {
 
       {/* Opponent artwork followed by Speed tiers, species, and held item. */}
       <div className="side-col opp">
-        <PokemonArt species={opp.species} side="opp" />
+        <PokemonArt
+          species={opp.species}
+          side="opp"
+          wallActive={environment.opponentWallActive}
+          onWallChange={(opponentWallActive) =>
+            setEnvironment((current) => ({ ...current, opponentWallActive }))
+          }
+        />
         <SpeedTiersLine species={opp.species} />
         <div className="side-fields">
           <IconRow icon={(

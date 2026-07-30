@@ -26,6 +26,8 @@ export interface DetectionServerSnapshot {
   failedSides: DetectionSide[];
 }
 
+export type DetectionControlContent = "scan" | "loading" | "vs";
+
 export function createDetectionSelectionState(
   status: DetectionStatus,
   player: string,
@@ -38,6 +40,18 @@ export function createDetectionSelectionState(
     latestRevision: 0,
     appliedRunIDs: { player: 0, opponent: 0 },
   };
+}
+
+export function detectionControlContent(
+  state: DetectionSelectionState,
+  requestingDetection: boolean,
+): DetectionControlContent {
+  if (requestingDetection || state.status === "detecting") {
+    return "loading";
+  }
+  const bothSidesDetected =
+    state.appliedRunIDs.player > 0 && state.appliedRunIDs.opponent > 0;
+  return bothSidesDetected ? "vs" : "scan";
 }
 
 export function applyServerSnapshot(

@@ -2,14 +2,20 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { createServer } from "vite";
 import { createNeutralStatStages } from "../src/lib/stat-stage.ts";
+import { createBattleEnvironment } from "../src/lib/battle-environment.ts";
 
 const vite = await createServer({ appType: "custom", server: { middlewareMode: true } });
 const { calcMyAttack } = await vite.ssrLoadModule("/src/lib/calc.ts") as {
-  calcMyAttack: (me: Record<string, unknown>, opp: Record<string, unknown>) => {
+  calcMyAttack: (
+    me: Record<string, unknown>,
+    opp: Record<string, unknown>,
+    environment: Record<string, unknown>,
+  ) => {
     attackerAbilityApplied: boolean;
     presets: Array<{ minPercent: number; maxPercent: number }>;
   };
 };
+const environment = createBattleEnvironment();
 
 after(async () => {
   await vite.close();
@@ -47,10 +53,12 @@ test("reports Adaptability as automatically applied only to a matching STAB move
   const applied = calcMyAttack(
     myConfig("Basculegion", "Adaptability", "Surf", false),
     opponentConfig(),
+    environment,
   );
   const notApplied = calcMyAttack(
     myConfig("Basculegion", "Adaptability", "Thunderbolt", false),
     opponentConfig(),
+    environment,
   );
 
   assert.equal(applied.attackerAbilityApplied, true);
@@ -61,10 +69,12 @@ test("manual Flash Fire activation changes Fire damage and remains user-controll
   const inactive = calcMyAttack(
     myConfig("Arcanine", "Flash Fire", "Flamethrower", false),
     opponentConfig(),
+    environment,
   );
   const active = calcMyAttack(
     myConfig("Arcanine", "Flash Fire", "Flamethrower", true),
     opponentConfig(),
+    environment,
   );
 
   assert.equal(inactive.attackerAbilityApplied, false);
@@ -76,10 +86,12 @@ test("manual Electromorphosis activation doubles Electric move power", () => {
   const inactive = calcMyAttack(
     myConfig("Bellibolt", "Electromorphosis", "Thunderbolt", false),
     opponentConfig(),
+    environment,
   );
   const active = calcMyAttack(
     myConfig("Bellibolt", "Electromorphosis", "Thunderbolt", true),
     opponentConfig(),
+    environment,
   );
 
   assert.equal(active.attackerAbilityApplied, true);
@@ -91,10 +103,12 @@ test("Skill Link automatically uses the maximum hit count", () => {
   const regular = calcMyAttack(
     myConfig("Toucannon", "Sheer Force", "Bullet Seed", false),
     opponentConfig(),
+    environment,
   );
   const skillLink = calcMyAttack(
     myConfig("Toucannon", "Skill Link", "Bullet Seed", false),
     opponentConfig(),
+    environment,
   );
 
   assert.equal(skillLink.attackerAbilityApplied, true);

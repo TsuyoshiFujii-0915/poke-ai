@@ -4,8 +4,25 @@ import {
   applyServerSnapshot,
   applyUserSelection,
   createDetectionSelectionState,
+  detectionControlContent,
   type DetectionServerSnapshot,
 } from "../src/lib/detection-state.ts";
+
+test("shows SCAN, a spinner, then VS as detection progresses", () => {
+  const initial = createDetectionSelectionState("idle", "", "");
+  const detecting = { ...initial, status: "detecting" as const };
+  const completed = {
+    ...initial,
+    player: "Blastoise",
+    opponent: "Garchomp",
+    appliedRunIDs: { player: 1, opponent: 1 },
+  };
+
+  assert.equal(detectionControlContent(initial, false), "scan");
+  assert.equal(detectionControlContent(initial, true), "loading");
+  assert.equal(detectionControlContent(detecting, false), "loading");
+  assert.equal(detectionControlContent(completed, false), "vs");
+});
 
 test("starting a detection run preserves current names until results arrive", () => {
   const current = createDetectionSelectionState("idle", "Raichu-Mega-X", "Garchomp-Mega");
