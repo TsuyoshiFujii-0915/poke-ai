@@ -385,6 +385,10 @@ body {
   gap: 6px;
 }
 
+.side-col.opp .side-fields {
+  transform: translateY(14px);
+}
+
 .side-fields .search-select,
 .side-fields .search-select input {
   width: 100%;
