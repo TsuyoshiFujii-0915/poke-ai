@@ -602,7 +602,7 @@ body {
 
 .wall-control {
   position: absolute;
-  top: 12px;
+  bottom: 80px;
   z-index: 4;
   width: 28px;
   height: 28px;
