@@ -744,6 +744,7 @@ body {
 }
 
 .poke-art.opp {
+  --center-edge-offset: 1px;
   background: radial-gradient(closest-side, rgba(255, 93, 126, 0.14), transparent 72%);
 }
 
