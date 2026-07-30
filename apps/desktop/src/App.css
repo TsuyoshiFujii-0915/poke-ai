@@ -594,6 +594,7 @@ body {
   --center-edge-offset: 0;
   position: relative;
   flex: 0 1 140px;
+  max-height: 120px;
   min-height: 40px;
   display: flex;
   align-items: center;
