@@ -36,9 +36,36 @@ import movePatch from "../data/champions-move-patch.json";
 const CHAMPIONS_MOVE_OVERRIDES = movePatch as Record<string, State.Move["overrides"]>;
 
 /** チャンピオンズ差分パッチを適用したMoveを作る */
-function championsMove(moveEn: string, attackerAbility: string): Move {
-  const move = new Move(gen, moveEn, { overrides: CHAMPIONS_MOVE_OVERRIDES[moveEn] });
-  if (attackerAbility !== "Dragonize") return move;
+interface ChampionsMoveResolution {
+  move: Move;
+  attackerAbilityApplied: boolean;
+}
+
+function championsMove(
+  moveEn: string,
+  attackerAbility: string,
+  abilityTriggerActive: boolean,
+): ChampionsMoveResolution {
+  const moveData = gen.moves.get(toID(moveEn) as never);
+  const move = new Move(gen, moveEn, {
+    ability: attackerAbility as State.Pokemon["ability"],
+    overrides: CHAMPIONS_MOVE_OVERRIDES[moveEn],
+  });
+  if (
+    attackerAbility === "Electromorphosis" &&
+    abilityTriggerActive &&
+    move.hasType("Electric")
+  ) {
+    move.bp *= 2;
+    move.overrides = { ...move.overrides, basePower: move.bp };
+    return { move, attackerAbilityApplied: true };
+  }
+  if (attackerAbility === "Skill Link" && Array.isArray(moveData?.multihit)) {
+    return { move, attackerAbilityApplied: true };
+  }
+  if (attackerAbility !== "Dragonize") {
+    return { move, attackerAbilityApplied: false };
+  }
 
   const cannotChangeType = new Set([
     "Judgment",
@@ -50,14 +77,17 @@ function championsMove(moveEn: string, attackerAbility: string): Move {
     "Weather Ball",
     "Struggle",
   ]);
-  if (!move.hasType("Normal") || cannotChangeType.has(move.originalName)) return move;
+  if (!move.hasType("Normal") || cannotChangeType.has(move.originalName)) {
+    return { move, attackerAbilityApplied: false };
+  }
   if (move.named("Flail")) {
     throw new Error("unsupported Champions damage ability: Dragonize with Flail");
   }
 
   move.type = "Dragon";
   move.bp = Math.floor((move.bp * 4915) / 4096 + 0.5);
-  return move;
+  move.overrides = { ...move.overrides, type: move.type, basePower: move.bp };
+  return { move, attackerAbilityApplied: true };
 }
 
 export const LEVEL = 50;
@@ -85,6 +115,7 @@ export interface NatureMods {
 export interface MySideConfig {
   species: string;
   ability: string;
+  abilityTriggerActive: boolean;
   item?: string;
   move?: string;
   points: ChampionPoints;
@@ -99,6 +130,7 @@ export interface MySideConfig {
 export interface OpponentConfig {
   species: string;
   ability: string;
+  abilityTriggerActive: boolean;
   item?: string;
   move?: string;
   stages: StatStages;
@@ -114,6 +146,8 @@ export interface PresetResult {
 export interface DirectionResult {
   moveEn: string;
   presets: PresetResult[];
+  attackerAbilityApplied: boolean;
+  defenderAbilityApplied: boolean;
   error?: string;
 }
 
@@ -133,6 +167,7 @@ export function championsPokemon(
     mods?: NatureMods;
     item?: string;
     ability: string;
+    abilityTriggerActive: boolean;
     stages: StatStages;
   },
 ): Pokemon {
@@ -152,6 +187,7 @@ export function championsPokemon(
   return new Pokemon(gen, species, {
     level: LEVEL,
     ability: opts.ability as State.Pokemon["ability"],
+    abilityOn: opts.abilityTriggerActive,
     item: opts.item || undefined,
     nature: "Hardy",
     ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
@@ -199,7 +235,7 @@ export function damageStageKeysForMove(moveEn: string): DamageStageKeys | null {
 
 function applyDamageAbility(pokemon: Pokemon, role: DamageRole): Pokemon {
   if (!pokemon.ability) throw new Error(`${role} ability is not selected`);
-  const resolved = resolveAbilityForDamage(pokemon.ability, role);
+  const resolved = resolveAbilityForDamage(pokemon.ability, role, pokemon.abilityOn === true);
   const prepared = pokemon.clone();
   prepared.ability = resolved.ability as State.Pokemon["ability"];
   prepared.abilityOn = resolved.abilityOn;
@@ -216,17 +252,27 @@ function prepareAttackerAbility(pokemon: Pokemon): Pokemon {
   return prepared;
 }
 
-function championsField(move: Move, attackerAbility: string): Field {
-  const megaSolUsesSun = attackerAbility === "Mega Sol" && (
+function megaSolApplies(move: Move, attackerAbility: string): boolean {
+  return attackerAbility === "Mega Sol" && (
     move.originalName === "Weather Ball" || move.hasType("Fire", "Water")
   );
-  return new Field(megaSolUsesSun ? { weather: "Sun" } : {});
 }
 
-function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: string): PresetResult {
+function championsField(move: Move, attackerAbility: string): Field {
+  return new Field(megaSolApplies(move, attackerAbility) ? { weather: "Sun" } : {});
+}
+
+interface DamageRun {
+  preset: PresetResult;
+  attackerAbilityApplied: boolean;
+  defenderAbilityApplied: boolean;
+}
+
+function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: string): DamageRun {
   if (!attacker.ability) throw new Error("attacker ability is not selected");
   const attackerAbility = attacker.ability;
-  const move = championsMove(moveEn, attackerAbility);
+  const moveResolution = championsMove(moveEn, attackerAbility, attacker.abilityOn === true);
+  const move = moveResolution.move;
   const result = calculate(
     gen,
     prepareAttackerAbility(attacker),
@@ -243,24 +289,41 @@ function runOne(attacker: Pokemon, defender: Pokemon, moveEn: string, label: str
     koText = "-";
   }
   return {
-    label,
-    minPercent: (range[0] / maxHP) * 100,
-    maxPercent: (range[1] / maxHP) * 100,
-    koText,
+    preset: {
+      label,
+      minPercent: (range[0] / maxHP) * 100,
+      maxPercent: (range[1] / maxHP) * 100,
+      koText,
+    },
+    attackerAbilityApplied:
+      moveResolution.attackerAbilityApplied ||
+      megaSolApplies(move, attackerAbility) ||
+      result.rawDesc.attackerAbility !== undefined,
+    defenderAbilityApplied: result.rawDesc.defenderAbility !== undefined,
+  };
+}
+
+function waitingResult(moveEn: string, error: string): DirectionResult {
+  return {
+    moveEn,
+    presets: [],
+    attackerAbilityApplied: false,
+    defenderAbilityApplied: false,
+    error,
   };
 }
 
 /** 自分→相手: 相手の耐久3プリセット（能力ポイント想定） */
 export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionResult {
   if (!me.species || !opp.species || !me.move) {
-    return { moveEn: me.move ?? "", presets: [], error: "入力待ち" };
+    return waitingResult(me.move ?? "", "入力待ち");
   }
   if (!me.ability || !opp.ability) {
-    return { moveEn: me.move, presets: [], error: "特性を選択" };
+    return waitingResult(me.move, "特性を選択");
   }
   const category = moveCategory(me.move);
   if (category === "Status") {
-    return { moveEn: me.move, presets: [], error: "変化技（ダメージなし）" };
+    return waitingResult(me.move, "変化技（ダメージなし）");
   }
   const defStat = category === "Physical" ? "def" : "spd";
   const defLabel = category === "Physical" ? "B" : "D";
@@ -277,36 +340,41 @@ export function calcMyAttack(me: MySideConfig, opp: OpponentConfig): DirectionRe
       mods: { plus: me.plusStat, minus: me.minusStat },
       item: me.item,
       ability: me.ability,
+      abilityTriggerActive: me.abilityTriggerActive,
       stages: me.stages,
+    });
+    const runs = presets.map(([label, points]) => {
+      const defender = championsPokemon(opp.species, {
+        points,
+        item: opp.item,
+        ability: opp.ability,
+        abilityTriggerActive: opp.abilityTriggerActive,
+        stages: opp.stages,
+      });
+      return runOne(attacker, defender, me.move!, label);
     });
     return {
       moveEn: me.move,
-      presets: presets.map(([label, points]) => {
-        const defender = championsPokemon(opp.species, {
-          points,
-          item: opp.item,
-          ability: opp.ability,
-          stages: opp.stages,
-        });
-        return runOne(attacker, defender, me.move!, label);
-      }),
+      presets: runs.map((run) => run.preset),
+      attackerAbilityApplied: runs.some((run) => run.attackerAbilityApplied),
+      defenderAbilityApplied: runs.some((run) => run.defenderAbilityApplied),
     };
   } catch (e) {
-    return { moveEn: me.move, presets: [], error: String(e) };
+    return waitingResult(me.move, String(e));
   }
 }
 
 /** 相手→自分: 相手の火力3プリセット（能力ポイント想定） */
 export function calcOpponentAttack(me: MySideConfig, opp: OpponentConfig): DirectionResult {
   if (!me.species || !opp.species || !opp.move) {
-    return { moveEn: opp.move ?? "", presets: [], error: "入力待ち" };
+    return waitingResult(opp.move ?? "", "入力待ち");
   }
   if (!me.ability || !opp.ability) {
-    return { moveEn: opp.move, presets: [], error: "特性を選択" };
+    return waitingResult(opp.move, "特性を選択");
   }
   const category = moveCategory(opp.move);
   if (category === "Status") {
-    return { moveEn: opp.move, presets: [], error: "変化技（ダメージなし）" };
+    return waitingResult(opp.move, "変化技（ダメージなし）");
   }
   const atkStat: NatureStatKey = category === "Physical" ? "atk" : "spa";
   const atkLabel = category === "Physical" ? "A" : "C";
@@ -323,22 +391,27 @@ export function calcOpponentAttack(me: MySideConfig, opp: OpponentConfig): Direc
       mods: { plus: me.plusStat, minus: me.minusStat },
       item: me.item,
       ability: me.ability,
+      abilityTriggerActive: me.abilityTriggerActive,
       stages: me.stages,
+    });
+    const runs = presets.map(([label, points, mods]) => {
+      const attacker = championsPokemon(opp.species, {
+        points,
+        mods,
+        item: opp.item,
+        ability: opp.ability,
+        abilityTriggerActive: opp.abilityTriggerActive,
+        stages: opp.stages,
+      });
+      return runOne(attacker, defender, opp.move!, label);
     });
     return {
       moveEn: opp.move,
-      presets: presets.map(([label, points, mods]) => {
-        const attacker = championsPokemon(opp.species, {
-          points,
-          mods,
-          item: opp.item,
-          ability: opp.ability,
-          stages: opp.stages,
-        });
-        return runOne(attacker, defender, opp.move!, label);
-      }),
+      presets: runs.map((run) => run.preset),
+      attackerAbilityApplied: runs.some((run) => run.attackerAbilityApplied),
+      defenderAbilityApplied: runs.some((run) => run.defenderAbilityApplied),
     };
   } catch (e) {
-    return { moveEn: opp.move, presets: [], error: String(e) };
+    return waitingResult(opp.move, String(e));
   }
 }

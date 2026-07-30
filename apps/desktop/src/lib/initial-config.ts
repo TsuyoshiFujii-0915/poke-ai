@@ -5,6 +5,7 @@ export function createInitialMySideConfig(): MySideConfig {
   return {
     species: "",
     ability: "",
+    abilityTriggerActive: false,
     item: "",
     move: "",
     points: {

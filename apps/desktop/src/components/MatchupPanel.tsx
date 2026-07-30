@@ -26,6 +26,7 @@ import {
   speciesEntries,
 } from "../lib/dex";
 import { reconcileAbilitySelection } from "../lib/ability-selection";
+import { isManualAbilityTrigger } from "../lib/ability-calculation";
 import { jaAbility, jaItem, jaMove, jaSpecies, type NameEntry } from "../lib/names";
 import { normalizePointInput } from "../lib/point-input";
 import {
@@ -200,6 +201,42 @@ function AbilityIcon() {
       <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.8" />
       <path d="m10.3 11-3.1-1.8m6.5 1.8 3.1-1.8M12 14v3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
+  );
+}
+
+function AbilityActivationControl({
+  ability,
+  automaticActive,
+  manualActive,
+  onManualChange,
+}: {
+  ability: string;
+  automaticActive: boolean;
+  manualActive: boolean;
+  onManualChange: (active: boolean) => void;
+}): ReactNode {
+  const manual = isManualAbilityTrigger(ability);
+  const active = manual ? manualActive : automaticActive;
+  const title = manual
+    ? active
+      ? `${jaAbility(ability)}の発動状態を解除`
+      : `${jaAbility(ability)}を発動済みにする`
+    : active
+      ? `${jaAbility(ability)}が現在の計算に適用中`
+      : "現在の計算では特性補正なし";
+
+  return (
+    <button
+      type="button"
+      className={`ability-activation-button ${active ? "active" : ""} ${manual ? "manual" : "automatic"}`}
+      aria-label={title}
+      aria-pressed={active}
+      disabled={!ability || !manual}
+      title={title}
+      onClick={() => onManualChange(!manualActive)}
+    >
+      <AbilityIcon />
+    </button>
   );
 }
 
@@ -449,6 +486,7 @@ export function MatchupPanel() {
   const [opp, setOpp] = useState<OpponentConfig>({
     species: "",
     ability: "",
+    abilityTriggerActive: false,
     item: "",
     move: "",
     stages: createNeutralStatStages(),
@@ -467,7 +505,7 @@ export function MatchupPanel() {
         species,
         SELECTABLE_SPECIES_NAMES,
       ) ? current.move : "";
-      return { ...current, species, ability, move };
+      return { ...current, species, ability, abilityTriggerActive: false, move };
     });
   }, [detection.selection.player]);
 
@@ -483,7 +521,7 @@ export function MatchupPanel() {
         species,
         SELECTABLE_SPECIES_NAMES,
       ) ? current.move : "";
-      return { ...current, species, ability, move };
+      return { ...current, species, ability, abilityTriggerActive: false, move };
     });
   }, [detection.selection.opponent]);
 
@@ -496,6 +534,10 @@ export function MatchupPanel() {
 
   const myAttack = useMemo(() => calcMyAttack(me, opp), [me, opp]);
   const oppAttack = useMemo(() => calcOpponentAttack(me, opp), [me, opp]);
+  const myAutomaticAbilityActive =
+    myAttack.attackerAbilityApplied || oppAttack.defenderAbilityApplied;
+  const oppAutomaticAbilityActive =
+    oppAttack.attackerAbilityApplied || myAttack.defenderAbilityApplied;
 
   return (
     <div className="matchup-panel">
@@ -545,11 +587,18 @@ export function MatchupPanel() {
               disabled={false}
             />
           </IconRow>
-          <IconRow icon={<AbilityIcon />}>
+          <IconRow icon={(
+            <AbilityActivationControl
+              ability={me.ability}
+              automaticActive={myAutomaticAbilityActive}
+              manualActive={me.abilityTriggerActive}
+              onManualChange={(abilityTriggerActive) => setMe({ ...me, abilityTriggerActive })}
+            />
+          )}>
             <SearchSelect
               entries={myAbilities}
               value={me.ability}
-              onChange={(ability) => setMe({ ...me, ability })}
+              onChange={(ability) => setMe({ ...me, ability, abilityTriggerActive: false })}
               placeholder="特性"
               display={jaAbility}
               disabled={!me.species}
@@ -659,11 +708,18 @@ export function MatchupPanel() {
               disabled={false}
             />
           </IconRow>
-          <IconRow icon={<AbilityIcon />}>
+          <IconRow icon={(
+            <AbilityActivationControl
+              ability={opp.ability}
+              automaticActive={oppAutomaticAbilityActive}
+              manualActive={opp.abilityTriggerActive}
+              onManualChange={(abilityTriggerActive) => setOpp({ ...opp, abilityTriggerActive })}
+            />
+          )}>
             <SearchSelect
               entries={oppAbilities}
               value={opp.ability}
-              onChange={(ability) => setOpp({ ...opp, ability })}
+              onChange={(ability) => setOpp({ ...opp, ability, abilityTriggerActive: false })}
               placeholder="特性"
               display={jaAbility}
               disabled={!opp.species}
