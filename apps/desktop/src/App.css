@@ -744,7 +744,8 @@ body {
 }
 
 .poke-art.opp {
-  --center-edge-offset: 1px;
+  /* The 22px Mega button extends 4px beyond its 14px icon slot. */
+  --center-edge-offset: -4px;
   background: radial-gradient(closest-side, rgba(255, 93, 126, 0.14), transparent 72%);
 }
 
