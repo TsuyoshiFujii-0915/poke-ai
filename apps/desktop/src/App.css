@@ -591,7 +591,7 @@ body {
    固定基準の高さ（狭いときは縮む）。flex-growさせないことで
    カラム全体が中央にまとまり、上下に余白が生まれる */
 .poke-art {
-  --center-edge-offset: 6px;
+  --center-edge-offset: 0;
   position: relative;
   flex: 0 1 140px;
   min-height: 40px;
