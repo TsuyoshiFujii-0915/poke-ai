@@ -132,6 +132,7 @@ private enum RecognitionEventUpdate {
 
 final class DetectionControlServer {
     private static let detectionTimeoutSeconds: TimeInterval = 12
+    private static let eventHeartbeatSeconds: TimeInterval = 15
     private static let allowedOrigins: Set<String> = [
         "http://localhost:1420",
         "http://127.0.0.1:1420",
@@ -146,6 +147,7 @@ final class DetectionControlServer {
     private var state = PokemonDetectionControlState()
     private var detectionTimeoutWorkItem: DispatchWorkItem?
     private var eventConnections: [NWConnection] = []
+    private var eventHeartbeatTimer: DispatchSourceTimer?
 
     init(port: UInt16, detectionController: PokemonDetectionControlling) throws {
         guard let networkPort = NWEndpoint.Port(rawValue: port) else {
@@ -165,6 +167,18 @@ final class DetectionControlServer {
 
     func start() -> Void {
         listener.start(queue: queue)
+        queue.async { [self] in
+            let timer = DispatchSource.makeTimerSource(queue: queue)
+            timer.schedule(
+                deadline: .now() + Self.eventHeartbeatSeconds,
+                repeating: Self.eventHeartbeatSeconds
+            )
+            timer.setEventHandler { [weak self] in
+                self?.broadcastEventPacket(Data(": keep-alive\n\n".utf8))
+            }
+            eventHeartbeatTimer = timer
+            timer.activate()
+        }
     }
 
     func publishRecognitionEvent(json: String) -> Void {
@@ -398,6 +412,7 @@ final class DetectionControlServer {
                 }
                 self.queue.async {
                     self.eventConnections.append(connection)
+                    self.monitorEventDisconnect(connection)
                 }
             })
         } catch {
@@ -406,7 +421,10 @@ final class DetectionControlServer {
     }
 
     private func broadcastEvent(json: String) -> Void {
-        let packet = Data("data: \(json)\n\n".utf8)
+        broadcastEventPacket(Data("data: \(json)\n\n".utf8))
+    }
+
+    private func broadcastEventPacket(_ packet: Data) -> Void {
         for connection in eventConnections {
             connection.send(content: packet, completion: .contentProcessed { [weak self] error in
                 if error != nil {
@@ -415,6 +433,17 @@ final class DetectionControlServer {
                     }
                 }
             })
+        }
+    }
+
+    private func monitorEventDisconnect(_ connection: NWConnection) -> Void {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { [weak self, weak connection] _, _, isComplete, error in
+            guard let self, let connection else { return }
+            if isComplete || error != nil {
+                self.removeEventConnection(connection)
+                return
+            }
+            self.monitorEventDisconnect(connection)
         }
     }
 

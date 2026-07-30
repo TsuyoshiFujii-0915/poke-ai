@@ -290,6 +290,15 @@ final class MJPEGServer {
     }
 
     private func accept(_ conn: NWConnection) {
+        conn.stateUpdateHandler = { [weak self, weak conn] state in
+            guard let self, let conn else { return }
+            switch state {
+            case .failed, .cancelled:
+                self.queue.async { self.remove(conn) }
+            default:
+                break
+            }
+        }
         conn.start(queue: queue)
         // リクエスト内容は見ずに、最初のデータ受信をトリガーにストリームを開始する
         conn.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] _, _, _, error in
@@ -307,8 +316,20 @@ final class MJPEGServer {
                     return
                 }
                 self.connections.append(conn)
+                self.monitorDisconnect(conn)
                 log("クライアント接続 (現在 \(self.connections.count) 台)")
             })
+        }
+    }
+
+    private func monitorDisconnect(_ conn: NWConnection) {
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 1) { [weak self, weak conn] _, _, isComplete, error in
+            guard let self, let conn else { return }
+            if isComplete || error != nil {
+                self.remove(conn)
+                return
+            }
+            self.monitorDisconnect(conn)
         }
     }
 
@@ -331,7 +352,13 @@ final class MJPEGServer {
     }
 
     private func remove(_ conn: NWConnection) {
+        guard connections.contains(where: { $0 === conn }) else {
+            conn.stateUpdateHandler = nil
+            conn.cancel()
+            return
+        }
         connections.removeAll { $0 === conn }
+        conn.stateUpdateHandler = nil
         conn.cancel()
         log("クライアント切断 (現在 \(connections.count) 台)")
     }

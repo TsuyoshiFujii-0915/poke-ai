@@ -5,13 +5,13 @@ import {
   updateStreamConnection,
 } from "../src/lib/stream-connection.ts";
 
-test("reloads the MJPEG request when capture control reconnects", () => {
+test("keeps the MJPEG request when capture control reconnects", () => {
   const initial = createStreamConnectionState();
   const loaded = updateStreamConnection(initial, "image-loaded");
   const reconnected = updateStreamConnection(loaded, "control-opened");
 
   assert.equal(loaded.connected, true);
-  assert.deepEqual(reconnected, { connected: false, revision: 1 });
+  assert.deepEqual(reconnected, loaded);
 });
 
 test("keeps one retry generation per failed image request", () => {

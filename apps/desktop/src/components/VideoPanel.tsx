@@ -1,12 +1,11 @@
 // ゲーム画面表示（サイドカーのMJPEGストリーム）
-import { useCallback, useEffect, useReducer, useRef, type ReactNode } from "react";
+import { useCallback, useReducer, useRef, type ReactNode } from "react";
 import {
   createStreamConnectionState,
   updateStreamConnection,
 } from "../lib/stream-connection";
 
 const STREAM_URL = "http://127.0.0.1:8787/stream";
-const CONTROL_EVENTS_URL = "http://127.0.0.1:8788/events";
 const RETRY_MS = 3000;
 
 export function VideoPanel(): ReactNode {
@@ -30,18 +29,6 @@ export function VideoPanel(): ReactNode {
       retryTimer.current = null;
       dispatch("retry-requested");
     }, RETRY_MS);
-  }, [clearRetry]);
-
-  useEffect(() => {
-    const events = new EventSource(CONTROL_EVENTS_URL);
-    events.onopen = (): void => {
-      clearRetry();
-      dispatch("control-opened");
-    };
-    return (): void => {
-      clearRetry();
-      events.close();
-    };
   }, [clearRetry]);
 
   return (

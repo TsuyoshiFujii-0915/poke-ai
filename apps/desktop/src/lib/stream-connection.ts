@@ -19,6 +19,7 @@ export function updateStreamConnection(
 ): StreamConnectionState {
   switch (event) {
     case "control-opened":
+      return state;
     case "retry-requested":
       return { connected: false, revision: state.revision + 1 };
     case "image-loaded":
