@@ -12,6 +12,15 @@ test("passes supported abilities to the damage engine unchanged", () => {
   });
 });
 
+test("passes weather-dependent damage abilities to the damage engine unchanged", () => {
+  for (const ability of ["Sand Force", "Solar Power"]) {
+    assert.deepEqual(resolveAbilityForDamage(ability, "attacker", false), {
+      ability,
+      abilityOn: false,
+    }, ability);
+  }
+});
+
 test("adapts Fire Mane to an equivalent active Fire boost", () => {
   assert.deepEqual(resolveAbilityForDamage("Firemane", "attacker", false), {
     ability: "Flash Fire",

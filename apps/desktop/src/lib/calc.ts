@@ -264,6 +264,10 @@ function megaSolApplies(move: Move, attackerAbility: string): boolean {
   );
 }
 
+function cloudNineApplies(ability: string, weatherPresent: boolean): boolean {
+  return ability === "Cloud Nine" && weatherPresent;
+}
+
 function championsField(
   move: Move,
   attackerAbility: string,
@@ -298,15 +302,19 @@ function runOne(
   category: DamageMoveCategory,
 ): DamageRun {
   if (!attacker.ability) throw new Error("attacker ability is not selected");
+  if (!defender.ability) throw new Error("defender ability is not selected");
   const attackerAbility = attacker.ability;
+  const defenderAbility = defender.ability;
   const moveResolution = championsMove(moveEn, attackerAbility, attacker.abilityOn === true);
   const move = moveResolution.move;
+  const field = championsField(move, attackerAbility, environment, direction, category);
+  const weatherPresent = field.weather !== undefined;
   const result = calculate(
     gen,
     prepareAttackerAbility(attacker),
     applyDamageAbility(defender, "defender"),
     move,
-    championsField(move, attackerAbility, environment, direction, category),
+    field,
   );
   const range = result.range();
   const maxHP = result.defender.maxHP();
@@ -326,8 +334,11 @@ function runOne(
     attackerAbilityApplied:
       moveResolution.attackerAbilityApplied ||
       megaSolApplies(move, attackerAbility) ||
+      cloudNineApplies(attackerAbility, weatherPresent) ||
       result.rawDesc.attackerAbility !== undefined,
-    defenderAbilityApplied: result.rawDesc.defenderAbility !== undefined,
+    defenderAbilityApplied:
+      cloudNineApplies(defenderAbility, weatherPresent) ||
+      result.rawDesc.defenderAbility !== undefined,
   };
 }
 

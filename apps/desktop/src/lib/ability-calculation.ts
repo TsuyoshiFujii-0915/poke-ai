@@ -23,8 +23,6 @@ const OMITTED_CONTEXT_ABILITIES = new Set([
   "Overgrow",
   "Quick Feet",
   "Rivalry",
-  "Sand Force",
-  "Solar Power",
   "Supreme Overlord",
   "Swarm",
   "Torrent",
