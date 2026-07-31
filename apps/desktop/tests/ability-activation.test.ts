@@ -224,3 +224,43 @@ test("Cloud Nine automatically suppresses selected weather from either side", ()
     defenderWithoutWeather.presets[0].minPercent,
   );
 });
+
+test("Mega Sol prevents adverse weather from weakening solar moves", () => {
+  for (const move of ["Solar Beam", "Solar Blade"]) {
+    const neutral = calcMyAttack(
+      myConfig("Meganium-Mega", "Mega Sol", move, false),
+      opponentConfig(),
+      environment,
+    );
+    for (const weather of ["Rain", "Sand", "Snow"] as const) {
+      const adverseWeather = calcMyAttack(
+        myConfig("Meganium-Mega", "Mega Sol", move, false),
+        opponentConfig(),
+        { ...environment, weather },
+      );
+
+      assert.equal(adverseWeather.attackerAbilityApplied, true, `${move} in ${weather}`);
+      assert.equal(
+        adverseWeather.presets[0].minPercent,
+        neutral.presets[0].minPercent,
+        `${move} in ${weather}`,
+      );
+      assert.equal(
+        adverseWeather.presets[0].maxPercent,
+        neutral.presets[0].maxPercent,
+        `${move} in ${weather}`,
+      );
+    }
+  }
+});
+
+test("Mega Starmie uses its Champions Attack stat before Huge Power", () => {
+  const result = calcMyAttack(
+    myConfig("Starmie-Mega", "Huge Power", "Liquidation", false),
+    opponentConfig(),
+    environment,
+  );
+
+  assert.ok(result.presets[0].minPercent > 57 && result.presets[0].minPercent < 58);
+  assert.ok(result.presets[0].maxPercent > 68 && result.presets[0].maxPercent < 69);
+});

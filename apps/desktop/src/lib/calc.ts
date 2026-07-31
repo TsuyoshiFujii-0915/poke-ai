@@ -30,7 +30,19 @@ import {
 import { gen, getAbilityNames, toID } from "./dex";
 import { toJapaneseKoText } from "./ko-text";
 import { validateStatStages, type StatStages } from "./stat-stage";
+import championsBaseStats from "../data/champions-base-stats.json";
 import movePatch from "../data/champions-move-patch.json";
+
+interface BaseStats {
+  hp: number;
+  atk: number;
+  def: number;
+  spa: number;
+  spd: number;
+  spe: number;
+}
+
+const CHAMPIONS_BASE_STATS = championsBaseStats as Record<string, BaseStats>;
 
 /**
  * チャンピオンズで本編（SV/gen9データ）から仕様変更された技のオーバーライド。
@@ -179,12 +191,14 @@ export function championsPokemon(
 ): Pokemon {
   const data = gen.species.get(toID(species) as never);
   if (!data) throw new Error(`unknown species: ${species}`);
+  const baseStats = CHAMPIONS_BASE_STATS[species];
+  if (!baseStats) throw new Error(`no Champions base stats: ${species}`);
   const p = opts.points ?? {};
   const mods = opts.mods ?? {};
   validateAbilitySelection(species, opts.ability, getAbilityNames(species));
   validateStatStages(opts.stages);
   const withMod = (key: NatureStatKey): number => {
-    const base = data.baseStats[key] + (p[key] ?? 0);
+    const base = baseStats[key] + (p[key] ?? 0);
     const mod = mods.plus === key ? 1.1 : mods.minus === key ? 0.9 : 1.0;
     if (mod === 1.0) return base;
     // 実数値 base+20 に補正を掛けた値になるよう種族値を逆算する
@@ -201,7 +215,7 @@ export function championsPokemon(
     boosts: opts.stages,
     overrides: {
       baseStats: {
-        hp: data.baseStats.hp + (p.hp ?? 0),
+        hp: baseStats.hp + (p.hp ?? 0),
         atk: withMod("atk"),
         def: withMod("def"),
         spa: withMod("spa"),
@@ -258,10 +272,8 @@ function prepareAttackerAbility(pokemon: Pokemon): Pokemon {
   return prepared;
 }
 
-function megaSolApplies(move: Move, attackerAbility: string): boolean {
-  return attackerAbility === "Mega Sol" && (
-    move.originalName === "Weather Ball" || move.hasType("Fire", "Water")
-  );
+function megaSolControlsWeather(move: Move, attackerAbility: string): boolean {
+  return attackerAbility === "Mega Sol" && move.originalName !== "Electro Shot";
 }
 
 function cloudNineApplies(ability: string, weatherPresent: boolean): boolean {
@@ -277,7 +289,7 @@ function championsField(
 ): Field {
   const resolved = resolveBattleField(environment, direction, category);
   return new Field({
-    weather: megaSolApplies(move, attackerAbility) ? "Sun" : resolved.weather,
+    weather: megaSolControlsWeather(move, attackerAbility) ? "Sun" : resolved.weather,
     terrain: resolved.terrain,
     defenderSide: {
       isReflect: resolved.isReflect,
@@ -333,7 +345,7 @@ function runOne(
     },
     attackerAbilityApplied:
       moveResolution.attackerAbilityApplied ||
-      megaSolApplies(move, attackerAbility) ||
+      megaSolControlsWeather(move, attackerAbility) ||
       cloudNineApplies(attackerAbility, weatherPresent) ||
       result.rawDesc.attackerAbility !== undefined,
     defenderAbilityApplied:

@@ -17,6 +17,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOVE_PATCH = JSON.parse(
   readFileSync(join(__dirname, "../src/data/champions-move-patch.json"), "utf8"),
 );
+const CHAMPIONS_BASE_STATS = JSON.parse(
+  readFileSync(join(__dirname, "../src/data/champions-base-stats.json"), "utf8"),
+);
 
 const gen = Generations.get(9);
 const LEVEL = 50;
@@ -52,8 +55,10 @@ function championsStat(base, sp, natureMod = 1.0, isHp = false) {
 function adapterPokemon(species, points = {}, mods = {}, item) {
   const data = gen.species.get(species.toLowerCase().replace(/[^a-z0-9]/g, ""));
   if (!data) throw new Error(`unknown: ${species}`);
+  const baseStats = CHAMPIONS_BASE_STATS[species];
+  if (!baseStats) throw new Error(`no Champions base stats: ${species}`);
   const withMod = (key) => {
-    const base = data.baseStats[key] + (points[key] ?? 0);
+    const base = baseStats[key] + (points[key] ?? 0);
     const mod = mods.plus === key ? 1.1 : mods.minus === key ? 0.9 : 1.0;
     if (mod === 1.0) return base;
     return Math.floor((base + 20) * mod) - 20;
@@ -66,7 +71,7 @@ function adapterPokemon(species, points = {}, mods = {}, item) {
     evs: {},
     overrides: {
       baseStats: {
-        hp: data.baseStats.hp + (points.hp ?? 0),
+        hp: baseStats.hp + (points.hp ?? 0),
         atk: withMod("atk"),
         def: withMod("def"),
         spa: withMod("spa"),
@@ -89,15 +94,15 @@ console.log("=== 1. 能力ポイント(+32) → 実数値 ===\n");
 // 攻撃100種 +32pt 無補正 = 152 — pkmnchamps.com の例
 {
   const expected = championsStat(100, 32, 1.0, false);
-  // 種族値100のポケモンで検証（Mew）
-  const p = adapterPokemon("Mew", { atk: 32 });
+  // Garganacl is a selectable Champions species with base 100 Attack.
+  const p = adapterPokemon("Garganacl", { atk: 32 });
   check("攻撃種100 +32pt = 152", p.stats.atk === 152 && expected === 152, `calc=${p.stats.atk}`);
 }
 
 // +32pt は 1pt ずつ実数値が変わる（チャンピオンズの能力ポイント仕様）
 {
-  const p31 = adapterPokemon("Mew", { atk: 31 });
-  const p32 = adapterPokemon("Mew", { atk: 32 });
+  const p31 = adapterPokemon("Garganacl", { atk: 31 });
+  const p32 = adapterPokemon("Garganacl", { atk: 32 });
   check(
     "+32pt は +31pt より実数値+1",
     p32.stats.atk === p31.stats.atk + 1,
@@ -109,7 +114,7 @@ console.log("=== 1. 能力ポイント(+32) → 実数値 ===\n");
 {
   const species = [
     ["Gengar", { hp: 60, atk: 65 }],
-    ["Mew", { hp: 100, atk: 100 }],
+    ["Garganacl", { hp: 100, atk: 100 }],
     ["Garchomp", { hp: 108, atk: 130 }],
   ];
   const modCases = [
@@ -153,8 +158,8 @@ console.log("=== 1. 能力ポイント(+32) → 実数値 ===\n");
 // 最大投資の最終実数値は、従来作のLv50・EV252と一致する。
 // ただし入力体系・途中配分・合計上限は別物なのでUIではEVへ変換しない。
 {
-  const champions = adapterPokemon("Mew", { atk: 32 });
-  const legacy = new Pokemon(gen, "Mew", {
+  const champions = adapterPokemon("Garganacl", { atk: 32 });
+  const legacy = new Pokemon(gen, "Garganacl", {
     level: 50,
     nature: "Hardy",
     ivs: { atk: 31 },
@@ -170,21 +175,21 @@ console.log("=== 1. 能力ポイント(+32) → 実数値 ===\n");
 // 性格1.1倍（↑トグル）
 {
   const expected = championsStat(100, 32, 1.1, false);
-  const p = adapterPokemon("Mew", { atk: 32 }, { plus: "atk" });
+  const p = adapterPokemon("Garganacl", { atk: 32 }, { plus: "atk" });
   check("攻撃+32pt A↑ = 167", p.stats.atk === 167 && expected === 167, `calc=${p.stats.atk}`);
 }
 
 // 性格0.9倍（↓トグル）
 {
   const expected = championsStat(100, 32, 0.9, false);
-  const p = adapterPokemon("Mew", { atk: 32 }, { minus: "atk" });
+  const p = adapterPokemon("Garganacl", { atk: 32 }, { minus: "atk" });
   check("攻撃+32pt A↓ = 136", p.stats.atk === 136 && expected === 136, `calc=${p.stats.atk}`);
 }
 
 // ↑↓は他ステータスに影響しない（S↑A↓でもCはそのまま）
 {
-  const neutral = adapterPokemon("Mew", { spa: 32 });
-  const modded = adapterPokemon("Mew", { spa: 32 }, { plus: "spe", minus: "atk" });
+  const neutral = adapterPokemon("Garganacl", { spa: 32 });
+  const modded = adapterPokemon("Garganacl", { spa: 32 }, { plus: "spe", minus: "atk" });
   check(
     "S↑A↓ でも特攻の実数値は不変",
     modded.stats.spa === neutral.stats.spa,
@@ -194,15 +199,15 @@ console.log("=== 1. 能力ポイント(+32) → 実数値 ===\n");
 
 console.log("\n=== 2. ダメージ計算（Gen6+式 / Lv50 / シングル） ===\n");
 
-// ガブリアス じしん → ヒードラン（4倍弱点・確1）
+// Earthquake from Garchomp into Salazzle tests a quadruple weakness.
 {
   const atk = adapterPokemon("Garchomp", { atk: 32 }, { plus: "atk", minus: "spa" }, "Choice Band");
-  const def = adapterPokemon("Heatran", { hp: 32 });
+  const def = adapterPokemon("Salazzle", { hp: 32 });
   const result = calculate(gen, atk, def, new Move(gen, "Earthquake"));
   const range = result.range();
   const pct = (range[0] / def.stats.hp) * 100;
   check(
-    "ガブリアス じしん → ヒードラン(H+32) 180%以上",
+    "ガブリアス じしん → エンニュート(H+32) 180%以上",
     pct >= 180,
     `${pct.toFixed(1)}% (${range[0]}-${range[1]}) ${result.kochance().text}`,
   );
@@ -211,11 +216,11 @@ console.log("\n=== 2. ダメージ計算（Gen6+式 / Lv50 / シングル） ===
 // メガシンカ対応
 {
   const atk = adapterPokemon("Gengar-Mega", { spa: 32 }, { plus: "spe", minus: "atk" });
-  const def = adapterPokemon("Amoonguss", { hp: 32, spd: 32 });
+  const def = adapterPokemon("Sylveon", { hp: 32, spd: 32 });
   const result = calculate(gen, atk, def, new Move(gen, "Sludge Bomb"));
   const range = result.range();
   check(
-    "メガゲンガー ヘドロばくだん → モロバレル(H+32 D+32)",
+    "メガゲンガー ヘドロばくだん → ニンフィア(H+32 D+32)",
     range[1] > 0,
     `${((range[0] / def.stats.hp) * 100).toFixed(1)}-${((range[1] / def.stats.hp) * 100).toFixed(1)}%`,
   );
@@ -224,9 +229,9 @@ console.log("\n=== 2. ダメージ計算（Gen6+式 / Lv50 / シングル） ===
 // 特性（ふゆう）でじしん無効
 {
   const atk = adapterPokemon("Garchomp", { atk: 32 }, { plus: "atk" });
-  const def = adapterPokemon("Cresselia", { hp: 32, def: 32 });
+  const def = adapterPokemon("Rotom-Wash", { hp: 32, def: 32 });
   const result = calculate(gen, atk, def, new Move(gen, "Earthquake"));
-  check("じしん → クレセリア(ふゆう) = 0", result.range()[1] === 0);
+  check("じしん → ウォッシュロトム(ふゆう) = 0", result.range()[1] === 0);
 }
 
 console.log("\n=== 3. チャンピオンズ技差分パッチ（2026-07-16 調査分） ===\n");
@@ -267,7 +272,7 @@ console.log("\n=== 3. チャンピオンズ技差分パッチ（2026-07-16 調�
 // タイプ変更: トラバサミ 草→鋼（フェアリーに抜群になる）
 {
   const move = championsMove("Snap Trap");
-  const atk = adapterPokemon("Galvantula", {});
+  const atk = adapterPokemon("Ariados", {});
   const fairy = adapterPokemon("Sylveon", {});
   const result = calculate(gen, atk, fairy, move);
   const neutral = calculate(gen, atk, fairy, new Move(gen, "Snap Trap"));
@@ -313,6 +318,28 @@ console.log("\n=== 4. チャンピオンズ生成データ（build-champions-dat
   check("使用可能ポケモン数が300〜340種", species.length >= 300 && species.length <= 340, `${species.length}種`);
   const unknown = species.filter((name) => !gen.species.get(toID(name)));
   check("全種が@smogon/calcで計算可能", unknown.length === 0, unknown.join(", ") || "OK");
+  check(
+    "全種に固定Showdown由来の種族値がある",
+    species.every((name) => CHAMPIONS_BASE_STATS[name] !== undefined),
+    `${Object.keys(CHAMPIONS_BASE_STATS).length}種分`,
+  );
+  check(
+    "メガスターミーのチャンピオンズ攻撃種族値は100",
+    CHAMPIONS_BASE_STATS["Starmie-Mega"]?.atk === 100,
+    `A=${CHAMPIONS_BASE_STATS["Starmie-Mega"]?.atk}`,
+  );
+}
+
+{
+  const source = JSON.parse(readFileSync(join(__dirname, "../src/data/champions-source.json"), "utf8"));
+  check(
+    "生成元Showdownコミットが固定・記録されている",
+    source.repository === "https://github.com/smogon/pokemon-showdown" &&
+      /^[0-9a-f]{40}$/.test(source.commit) &&
+      source.paths.includes("data/pokedex.ts") &&
+      source.paths.includes("data/mods/champions/formats-data.ts"),
+    source.commit,
+  );
 }
 
 {
@@ -355,9 +382,8 @@ console.log(`【結論】
   ChampionsAdapter（baseStats加算）で能力ポイント0〜32を正確に再現できる。
 - ダメージ式: Gen6+標準式。外部ソース(RotomPicks, Showdown Champions mode)も同旨。
   @smogon/calc Gen9は能力ポイントをネイティブには受け付けないため、
-  ChampionsAdapter経由に限りMVPの基礎計算へ使用する。
+  固定したShowdown種族値を渡すChampionsAdapter経由に限りMVPの基礎計算へ使用する。
 - 未検証/リスク:
-  · ZA新規メガの種族値・特性差分（Showdownデータとの乖離）
   · ゲーム内実測ダメージとの照合（Phase 1で10ケース以上）
   · 現在レギュレーションはテラスタルなし（将来導入予定）
   · メガシンカ1回/試合等のルールは計算外（入力でメガ形態を指定する前提）

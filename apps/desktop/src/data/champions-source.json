@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/smogon/pokemon-showdown",
+  "commit": "247863645fc1831ceab8366e32b81c7299df95e1",
+  "paths": [
+    "data/pokedex.ts",
+    "data/mods/champions/formats-data.ts",
+    "data/mods/champions/items.ts",
+    "data/mods/champions/learnsets.ts",
+    "data/mods/champions/moves.ts"
+  ]
+}

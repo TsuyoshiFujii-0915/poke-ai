@@ -12,6 +12,7 @@ import {
   type NameEntry,
 } from "./names";
 import artworkIds from "../data/artwork-ids.json";
+import championsBaseStats from "../data/champions-base-stats.json";
 import championsSpecies from "../data/champions-species.json";
 import championsItems from "../data/champions-items.json";
 import championsAbilities from "../data/champions-abilities.json";
@@ -19,6 +20,15 @@ import championsMoves from "../data/champions-moves.json";
 import championsLearnsets from "../data/champions-learnsets.json";
 
 export const gen = Generations.get(9);
+
+type ChampionsBaseStats = Record<string, {
+  hp: number;
+  atk: number;
+  def: number;
+  spa: number;
+  spd: number;
+  spe: number;
+}>;
 
 export function toID(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -59,10 +69,10 @@ export function getArtworkId(nameEn: string): number | null {
   return (artworkIds as Record<string, number>)[nameEn] ?? null;
 }
 
-/** Returns base Speed, or null when the species is absent from @smogon/calc. */
+/** Returns Champions base Speed, or null when the species is not selectable. */
 export function getBaseSpeed(nameEn: string): number | null {
-  const species = gen.species.get(toID(nameEn) as never);
-  return species ? species.baseStats.spe : null;
+  const stats = (championsBaseStats as ChampionsBaseStats)[nameEn];
+  return stats ? stats.spe : null;
 }
 
 /**

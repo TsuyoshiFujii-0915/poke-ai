@@ -65,9 +65,19 @@ function buildNameTable(rows) {
   // en → ja の逆引き
   const enToJa = new Map();
   for (const { en, ja } of table.values()) {
-    if (en && ja) enToJa.set(en, ja);
+    if (en && ja) enToJa.set(canonicalEnglishName(en), ja);
   }
   return enToJa;
+}
+
+/**
+ * Normalizes punctuation differences between PokeAPI and Showdown names.
+ *
+ * @param {string} name English display name.
+ * @returns {string} Canonical Showdown-compatible name.
+ */
+function canonicalEnglishName(name) {
+  return name.replaceAll("’", "'");
 }
 
 // フォーム接尾辞 → 日本語表現（プレフィックス or サフィックス）
@@ -126,6 +136,45 @@ const CHAMPIONS_ABILITY_NAMES = {
   "Spicy Spray": "とびだすハバネロ",
 };
 
+// PokeAPI exposes identifiers for these items but does not publish localized
+// item_names rows yet. These are their Japanese in-game names.
+const CHAMPIONS_ITEM_NAMES = {
+  Barbaracite: "ガメノデスナイト",
+  Chandelurite: "シャンデラナイト",
+  Chesnaughtite: "ブリガロナイト",
+  Chimechite: "チリーンナイト",
+  Clefablite: "ピクシナイト",
+  Crabominite: "ケケンカニナイト",
+  Delphoxite: "マフォクシナイト",
+  Dragalgite: "ドラミドナイト",
+  Dragoninite: "カイリュナイト",
+  Drampanite: "ジジーロナイト",
+  Eelektrossite: "シビルドナイト",
+  Emboarite: "エンブオナイト",
+  Excadrite: "ドリュウズナイト",
+  Falinksite: "タイレーツナイト",
+  Feraligite: "オーダイルナイト",
+  Floettite: "フラエッテナイト",
+  Froslassite: "ユキメノコナイト",
+  Glimmoranite: "キラフロルナイト",
+  Golurkite: "ゴルーグナイト",
+  Greninjite: "ゲッコウガナイト",
+  Hawluchanite: "ルチャブルナイト",
+  Malamarite: "カラマネナイト",
+  Meganiumite: "メガニウムナイト",
+  Meowsticite: "ニャオニクスナイト",
+  Pyroarite: "カエンジシナイト",
+  "Raichunite X": "ライチュウナイトX",
+  "Raichunite Y": "ライチュウナイトY",
+  Scolipite: "ペンドラナイト",
+  Scovillainite: "スコヴィラナイト",
+  Scraftinite: "ズルズキナイト",
+  Skarmorite: "エアームドナイト",
+  Staraptite: "ムクホークナイト",
+  Starminite: "スターミナイト",
+  Victreebelite: "ウツボットナイト",
+};
+
 const gen = Generations.get(9);
 const out = { species: {}, moves: {}, items: {}, abilities: {} };
 const stats = { species: [0, 0], moves: [0, 0], items: [0, 0], abilities: [0, 0] };
@@ -152,6 +201,7 @@ for (const a of gen.abilities) {
   if (ja) out.abilities[a.name] = ja;
 }
 Object.assign(out.abilities, CHAMPIONS_ABILITY_NAMES);
+Object.assign(out.items, CHAMPIONS_ITEM_NAMES);
 
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(out));

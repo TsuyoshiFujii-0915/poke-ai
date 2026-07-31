@@ -8,11 +8,13 @@
 // 実行: node scripts/build-champions-data.mjs
 // 出力:
 //   src/data/champions-species.json    使用可能ポケモン（Showdown英語名の配列）
+//   src/data/champions-base-stats.json Species name → Champions base stats
 //   src/data/champions-items.json      使用可能な持ち物（英語名の配列）
 //   src/data/champions-abilities.json  Species name → selectable ability names
 //   src/data/champions-moves.json      存在する技（英語名の配列）
 //   src/data/champions-learnsets.json  種ID → 習得技英語名の配列
 //   src/data/champions-move-patch.json ダメージ計算に影響する技のオーバーライド
+//   src/data/champions-source.json     Pinned upstream repository and file paths
 //
 // モッドのTypeScriptはesbuildでJSへ変換してから評価する。
 // @smogon/calc が知らない種・技は計算不能なため出力から除外し、
@@ -25,7 +27,16 @@ import { transformSync } from "esbuild";
 import { Generations } from "@smogon/calc";
 import { Dex } from "@pkmn/dex";
 
-const BASE = "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/mods/champions";
+const SHOWDOWN_REPOSITORY = "https://github.com/smogon/pokemon-showdown";
+const SHOWDOWN_COMMIT = "247863645fc1831ceab8366e32b81c7299df95e1";
+const RAW_BASE = `https://raw.githubusercontent.com/smogon/pokemon-showdown/${SHOWDOWN_COMMIT}`;
+const SOURCE_PATHS = [
+  "data/pokedex.ts",
+  "data/mods/champions/formats-data.ts",
+  "data/mods/champions/items.ts",
+  "data/mods/champions/learnsets.ts",
+  "data/mods/champions/moves.ts",
+];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = join(__dirname, "../src/data");
@@ -35,23 +46,30 @@ const dex = Dex.forGen(9);
 
 const toID = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** モッドのTSファイルを取得し、export済みテーブルを評価して返す */
-async function fetchModTable(file, exportName) {
-  const res = await fetch(`${BASE}/${file}`);
-  if (!res.ok) throw new Error(`${file}: HTTP ${res.status}`);
+/**
+ * Fetches and evaluates one exported Showdown data table.
+ *
+ * @param {string} path Repository-relative source path.
+ * @param {string} exportName Exported table name.
+ * @returns {Promise<Record<string, Record<string, unknown>>>} Evaluated table.
+ */
+async function fetchTable(path, exportName) {
+  const res = await fetch(`${RAW_BASE}/${path}`);
+  if (!res.ok) throw new Error(`${path}@${SHOWDOWN_COMMIT}: HTTP ${res.status}`);
   const js = transformSync(await res.text(), { loader: "ts", format: "cjs" }).code;
   const mod = { exports: {} };
   new Function("module", "exports", js)(mod, mod.exports);
   const table = mod.exports[exportName];
-  if (!table) throw new Error(`${file}: export ${exportName} が見つからない`);
+  if (!table) throw new Error(`${path}@${SHOWDOWN_COMMIT}: missing export ${exportName}`);
   return table;
 }
 
-const [formatsData, learnsetsTable, movesTable, itemsTable] = await Promise.all([
-  fetchModTable("formats-data.ts", "FormatsData"),
-  fetchModTable("learnsets.ts", "Learnsets"),
-  fetchModTable("moves.ts", "Moves"),
-  fetchModTable("items.ts", "Items"),
+const [pokedexTable, formatsData, itemsTable, learnsetsTable, movesTable] = await Promise.all([
+  fetchTable("data/pokedex.ts", "Pokedex"),
+  fetchTable("data/mods/champions/formats-data.ts", "FormatsData"),
+  fetchTable("data/mods/champions/items.ts", "Items"),
+  fetchTable("data/mods/champions/learnsets.ts", "Learnsets"),
+  fetchTable("data/mods/champions/moves.ts", "Moves"),
 ]);
 
 const skipped = [];
@@ -59,6 +77,7 @@ const skipped = [];
 // Showdown ID → @smogon/calc ID の表記ゆれ吸収
 // aegislash: calcはフォーム名必須（Aegislash-Shieldが通常時の姿）
 const SPECIES_ALIASES = { aegislash: "aegislashshield" };
+const POKEDEX_ALIASES = { aegislashshield: "aegislash" };
 
 // --- 使用可能ポケモン ---
 // formats-data.ts はgen9全種を列挙し、不参加種に isNonstandard: "Past"、
@@ -75,14 +94,31 @@ for (const [id, data] of Object.entries(formatsData)) {
 }
 species.sort();
 
-// --- Selectable abilities ---
-// The Champions mod inherits species ability slots from the current Showdown
-// Pokédex, including hidden abilities and the fixed abilities of Mega forms.
+// Generate both fields from the same pinned Pokédex revision. The calculation
+// package can lag behind Showdown species corrections.
+const baseStats = {};
 const abilities = {};
 for (const speciesName of species) {
-  const speciesData = dex.species.get(speciesName);
-  if (!speciesData.exists) {
-    throw new Error(`ability source species not found: ${speciesName}`);
+  const speciesId = toID(speciesName);
+  const pokedexId = POKEDEX_ALIASES[speciesId] ?? speciesId;
+  const speciesData = pokedexTable[pokedexId];
+  if (!speciesData) {
+    throw new Error(`pinned Pokédex species not found: ${speciesName} (${pokedexId})`);
+  }
+  const stats = speciesData.baseStats;
+  if (!stats || ["hp", "atk", "def", "spa", "spd", "spe"].some((key) => !Number.isInteger(stats[key]))) {
+    throw new Error(`invalid pinned Pokédex base stats: ${speciesName} (${pokedexId})`);
+  }
+  baseStats[speciesName] = {
+    hp: stats.hp,
+    atk: stats.atk,
+    def: stats.def,
+    spa: stats.spa,
+    spd: stats.spd,
+    spe: stats.spe,
+  };
+  if (!speciesData.abilities) {
+    throw new Error(`pinned Pokédex abilities not found: ${speciesName} (${pokedexId})`);
   }
   const names = [...new Set(Object.values(speciesData.abilities).filter(Boolean))];
   if (names.length === 0) {
@@ -234,6 +270,7 @@ if (!(movePatch["Dragon Claw"]?.flags?.slicing === 1)) {
 mkdirSync(OUT_DIR, { recursive: true });
 const write = (file, data) => writeFileSync(join(OUT_DIR, file), JSON.stringify(data));
 write("champions-species.json", species);
+write("champions-base-stats.json", baseStats);
 write("champions-items.json", items);
 write("champions-abilities.json", abilities);
 write("champions-moves.json", moves);
@@ -242,6 +279,11 @@ const sortedPatch = Object.fromEntries(
   Object.keys(movePatch).sort().map((name) => [name, movePatch[name]]),
 );
 writeFileSync(join(OUT_DIR, "champions-move-patch.json"), JSON.stringify(sortedPatch, null, 2) + "\n");
+writeFileSync(join(OUT_DIR, "champions-source.json"), JSON.stringify({
+  repository: SHOWDOWN_REPOSITORY,
+  commit: SHOWDOWN_COMMIT,
+  paths: SOURCE_PATHS,
+}, null, 2) + "\n");
 
 console.log(`使用可能ポケモン: ${species.length}種 / 持ち物: ${items.length}個 / 技: ${moves.length}種`);
 console.log(`習得技テーブル: ${Object.keys(learnsets).length}種分 / 技オーバーライド: ${Object.keys(movePatch).length}技`);
