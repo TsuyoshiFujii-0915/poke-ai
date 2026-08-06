@@ -791,17 +791,25 @@ case "recognize-stream":
             japaneseNamesPath: args[3]
         )
         let captureQueue = DispatchQueue(label: "capture.frames")
-        let eventRelay = RecognitionEventRelay()
-        let detector = UserTriggeredPokemonNameObserver(
+        let recognitionEventRelay = EventRelay()
+        let sceneEventRelay = EventRelay()
+        let nameObserver = UserTriggeredPokemonNameObserver(
             candidates: candidates,
             captureQueue: captureQueue,
-            eventPublisher: eventRelay.publish
+            eventPublisher: recognitionEventRelay.publish
+        )
+        let sceneObserver = try SceneMonitoringFrameObserver(
+            captureQueue: captureQueue,
+            eventPublisher: sceneEventRelay.publish,
+            sampleInterval: 0.125,
+            policy: SceneDetectionPolicy.ipadBattleHUDV1()
         )
         let controlServer = try DetectionControlServer(
             port: 8_788,
-            detectionController: detector
+            detectionController: nameObserver
         )
-        try eventRelay.install(handler: controlServer.publishRecognitionEvent)
+        try recognitionEventRelay.install(handler: controlServer.publishRecognitionEvent)
+        try sceneEventRelay.install(handler: controlServer.publishSceneEvent)
         controlServer.start()
         prepareCaptureEnvironment()
         guard let device = waitForDevice(timeoutSeconds: 20) else {
@@ -814,7 +822,10 @@ case "recognize-stream":
             scale: 0.5,
             quality: 0.6,
             targetFps: 30,
-            frameObserver: detector,
+            frameObserver: NameAndSceneFrameObserver(
+                nameObserver: nameObserver,
+                sceneObserver: sceneObserver
+            ),
             captureQueue: captureQueue
         )
     } catch {

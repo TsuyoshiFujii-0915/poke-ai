@@ -15,6 +15,7 @@ enum DetectionControlServerError: Error, CustomStringConvertible {
     case invalidRequestLine(String)
     case forbiddenOrigin(String?)
     case invalidRecognitionEvent(String)
+    case invalidSceneEvent(String)
     case eventRelayNotInstalled
 
     var description: String {
@@ -33,13 +34,15 @@ enum DetectionControlServerError: Error, CustomStringConvertible {
             return "HTTP origin is not allowed: \(origin ?? "missing")"
         case let .invalidRecognitionEvent(detail):
             return "invalid internal recognition event: \(detail)"
+        case let .invalidSceneEvent(detail):
+            return "invalid internal scene event: \(detail)"
         case .eventRelayNotInstalled:
             return "recognition event relay was used before installation"
         }
     }
 }
 
-final class RecognitionEventRelay {
+final class EventRelay {
     private let lock = NSLock()
     private var handler: ((String) -> Void)?
 
@@ -124,6 +127,16 @@ private struct RecognitionFailureEvent: Decodable {
     let side: BattleSide
 }
 
+private struct SceneRelayEvent: Codable {
+    let type: String
+    let revision: UInt64
+    let scene: String
+    let candidate: String
+    let stability: String
+    let playerHUD: String
+    let opponentHUD: String
+}
+
 private enum RecognitionEventUpdate {
     case ignored
     case presenceAccepted(PokemonDetectionResolution)
@@ -147,7 +160,10 @@ final class DetectionControlServer {
     private var state = PokemonDetectionControlState()
     private var detectionTimeoutWorkItem: DispatchWorkItem?
     private var eventConnections: [NWConnection] = []
+    private var sceneEventConnections: [NWConnection] = []
     private var eventHeartbeatTimer: DispatchSourceTimer?
+    private var latestSceneEvent: SceneRelayEvent
+    private var latestSceneJSON: String
 
     init(port: UInt16, detectionController: PokemonDetectionControlling) throws {
         guard let networkPort = NWEndpoint.Port(rawValue: port) else {
@@ -160,6 +176,17 @@ final class DetectionControlServer {
         )
         self.listener = try NWListener(using: parameters)
         self.detectionController = detectionController
+        let initialSceneEvent = SceneRelayEvent(
+            type: "scene_state",
+            revision: 0,
+            scene: "unknown",
+            candidate: "unknown",
+            stability: "stable",
+            playerHUD: "hidden",
+            opponentHUD: "hidden"
+        )
+        self.latestSceneEvent = initialSceneEvent
+        self.latestSceneJSON = try Self.encodeSceneEvent(initialSceneEvent)
         listener.newConnectionHandler = { [weak self] connection in
             self?.accept(connection)
         }
@@ -175,6 +202,7 @@ final class DetectionControlServer {
             )
             timer.setEventHandler { [weak self] in
                 self?.broadcastEventPacket(Data(": keep-alive\n\n".utf8))
+                self?.broadcastSceneEventPacket(Data(": keep-alive\n\n".utf8))
             }
             eventHeartbeatTimer = timer
             timer.activate()
@@ -194,6 +222,25 @@ final class DetectionControlServer {
                 }
             } catch {
                 log("エラー: 認識イベントの配信に失敗: \(error)")
+                exit(1)
+            }
+        }
+    }
+
+    func publishSceneEvent(json: String) -> Void {
+        queue.async { [self] in
+            do {
+                let event = try Self.decodeSceneEvent(json)
+                guard event.revision > latestSceneEvent.revision else {
+                    throw DetectionControlServerError.invalidSceneEvent(
+                        "revision \(event.revision) is not newer than \(latestSceneEvent.revision)"
+                    )
+                }
+                latestSceneEvent = event
+                latestSceneJSON = try Self.encodeSceneEvent(event)
+                broadcastSceneEventPacket(Data("data: \(latestSceneJSON)\n\n".utf8))
+            } catch {
+                log("エラー: 画面状態イベントの配信に失敗: \(error)")
                 exit(1)
             }
         }
@@ -251,6 +298,8 @@ final class DetectionControlServer {
             sendJSON(connection: connection, json: try stateJSON(), origin: origin)
         case ("GET", "/events"):
             openEventStream(connection: connection, origin: origin)
+        case ("GET", "/scene-events"):
+            openSceneEventStream(connection: connection, origin: origin)
         case ("POST", "/detect"):
             try startDetection()
             sendJSON(connection: connection, json: try stateJSON(), origin: origin)
@@ -420,6 +469,27 @@ final class DetectionControlServer {
         }
     }
 
+    private func openSceneEventStream(connection: NWConnection, origin: String) -> Void {
+        let headers = "HTTP/1.1 200 OK\r\n"
+            + "Content-Type: text/event-stream\r\n"
+            + "Cache-Control: no-cache\r\n"
+            + "Connection: keep-alive\r\n"
+            + "Access-Control-Allow-Origin: \(origin)\r\n"
+            + "Vary: Origin\r\n\r\n"
+        let initialEvent = "data: \(latestSceneJSON)\n\n"
+        let response = Data((headers + initialEvent).utf8)
+        connection.send(content: response, completion: .contentProcessed { [weak self] error in
+            guard let self, error == nil else {
+                connection.cancel()
+                return
+            }
+            self.queue.async {
+                self.sceneEventConnections.append(connection)
+                self.monitorSceneEventDisconnect(connection)
+            }
+        })
+    }
+
     private func broadcastEvent(json: String) -> Void {
         broadcastEventPacket(Data("data: \(json)\n\n".utf8))
     }
@@ -436,6 +506,18 @@ final class DetectionControlServer {
         }
     }
 
+    private func broadcastSceneEventPacket(_ packet: Data) -> Void {
+        for connection in sceneEventConnections {
+            connection.send(content: packet, completion: .contentProcessed { [weak self] error in
+                if error != nil {
+                    self?.queue.async {
+                        self?.removeSceneEventConnection(connection)
+                    }
+                }
+            })
+        }
+    }
+
     private func monitorEventDisconnect(_ connection: NWConnection) -> Void {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { [weak self, weak connection] _, _, isComplete, error in
             guard let self, let connection else { return }
@@ -444,6 +526,17 @@ final class DetectionControlServer {
                 return
             }
             self.monitorEventDisconnect(connection)
+        }
+    }
+
+    private func monitorSceneEventDisconnect(_ connection: NWConnection) -> Void {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { [weak self, weak connection] _, _, isComplete, error in
+            guard let self, let connection else { return }
+            if isComplete || error != nil {
+                self.removeSceneEventConnection(connection)
+                return
+            }
+            self.monitorSceneEventDisconnect(connection)
         }
     }
 
@@ -479,5 +572,48 @@ final class DetectionControlServer {
     private func removeEventConnection(_ connection: NWConnection) -> Void {
         eventConnections.removeAll { $0 === connection }
         connection.cancel()
+    }
+
+    private func removeSceneEventConnection(_ connection: NWConnection) -> Void {
+        sceneEventConnections.removeAll { $0 === connection }
+        connection.cancel()
+    }
+
+    private static func decodeSceneEvent(_ json: String) throws -> SceneRelayEvent {
+        guard let data = json.data(using: .utf8) else {
+            throw DetectionControlServerError.invalidSceneEvent("event is not UTF-8")
+        }
+        let event = try JSONDecoder().decode(SceneRelayEvent.self, from: data)
+        guard event.type == "scene_state" else {
+            throw DetectionControlServerError.invalidSceneEvent("event type must be scene_state")
+        }
+        let scenes: Set<String> = [
+            "unknown",
+            "out_of_battle",
+            "battle_result",
+            "team_selection",
+            "battle_input",
+            "party_overview",
+            "battle_action",
+        ]
+        guard scenes.contains(event.scene), scenes.contains(event.candidate) else {
+            throw DetectionControlServerError.invalidSceneEvent("event contains an unsupported scene")
+        }
+        guard event.stability == "stable" || event.stability == "transitioning" else {
+            throw DetectionControlServerError.invalidSceneEvent("event contains invalid stability")
+        }
+        let hudValues: Set<String> = ["visible", "hidden"]
+        guard hudValues.contains(event.playerHUD), hudValues.contains(event.opponentHUD) else {
+            throw DetectionControlServerError.invalidSceneEvent("event contains invalid HUD visibility")
+        }
+        return event
+    }
+
+    private static func encodeSceneEvent(_ event: SceneRelayEvent) throws -> String {
+        let data = try JSONEncoder().encode(event)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw DetectionControlServerError.invalidSceneEvent("event is not UTF-8")
+        }
+        return json
     }
 }

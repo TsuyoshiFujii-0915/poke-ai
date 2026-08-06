@@ -84,3 +84,15 @@ The command accepts only the `ipad-battle-hud-v1` layout. A source with an incom
 The desktop UI receives the current mode and confirmed names from `http://127.0.0.1:8788/events`. It changes modes with `POST /mode/auto` and `POST /mode/manual`. Manual mode deactivates the detector without stopping the MJPEG stream. Returning to automatic mode creates a fresh detector and clears stale automatic names before initial recognition runs again.
 
 The control service accepts only the known desktop development and packaged-app origins. Diagnostic consumers of stdout should continue to parse only lines prefixed with `EVENT_JSON`; other logs use the existing timestamped format.
+
+## Monitor battle scenes
+
+The capture process also samples lightweight scene features at 8 Hz while name OCR remains idle. Scene monitoring is read-only and never changes damage-calculator inputs.
+
+The desktop subscribes to `http://127.0.0.1:8788/scene-events`. Each Server-Sent Event reports:
+
+- the confirmed scene and current candidate;
+- whether the result is stable or transitioning;
+- independent player and opponent HUD visibility.
+
+Supported scene values are `unknown`, `out_of_battle`, `battle_result`, `team_selection`, `battle_input`, `party_overview`, and `battle_action`. Recognized home screens become `out_of_battle`; a completed result with its rank, reward, and action panels becomes `battle_result`; unsupported or ambiguous screens remain `unknown`. HUD disappearance starts battle-action confirmation only after a battle screen has already been established and stays hidden for four samples.
